@@ -33,5 +33,8 @@
 }
 
 @media (max-width: 768px) {
-  .clerk-main { margin-left: 0; }
+  .clerk-main {
+    margin-left: 0;
+    padding-top: 56px; /* height of mobile top bar */
+  }
 }

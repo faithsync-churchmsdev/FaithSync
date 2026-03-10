@@ -27,7 +27,8 @@ export default function ClerkLogin({ onBack }) {
     }
     // Check registered accounts
     const found = (clerkAccounts || []).find(a => a.username === form.username && a.password === form.password);
-    if (found) { setIsClerk(true); return; }
+    if (found && !found.active) { setError('Your account is pending admin approval. Please contact the parish administrator.'); return; }
+    if (found && found.active) { setIsClerk(true); return; }
     setError('Invalid username or password.');
   };
 
@@ -172,10 +173,6 @@ export default function ClerkLogin({ onBack }) {
         <div className="form-group">
           <label>Password</label>
           <input type="password" placeholder="Enter password" value={form.password} onChange={e => set('password', e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} />
-        </div>
-
-        <div className="login-hint">
-          <small>Default: <strong>clerk</strong> / <strong>faithsync2024</strong></small>
         </div>
 
         <button className="btn-primary btn-full" style={{ marginTop: '8px' }} onClick={handleLogin}>
