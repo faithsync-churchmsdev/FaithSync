@@ -1,0 +1,22 @@
+.bulletin-page { padding: 24px; max-width: 1100px; margin: 0 auto; }
+.bulletin-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 16px; flex-wrap: wrap; }
+.bulletin-header h1 { font-size: 1.6rem; margin-bottom: 4px; }
+.bulletin-header p { color: var(--text-light); font-size: 0.9rem; }
+.bulletin-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+.bulletin-empty { text-align: center; padding: 48px 24px; color: var(--text-light); }
+.bulletin-empty span { font-size: 2.5rem; display: block; margin-bottom: 12px; }
+.bulletin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.bulletin-card { background: white; border-radius: var(--radius); border: 1px solid var(--border); padding: 16px; box-shadow: var(--shadow-sm); position: relative; transition: box-shadow 0.15s; }
+.bulletin-card:hover { box-shadow: var(--shadow-md); }
+.bulletin-card.pinned { background: #fffdf0; border-color: #f0c040; }
+.pinned-badge { position: absolute; top: -10px; right: 12px; background: #f0c040; color: #7a5c00; padding: 2px 10px; border-radius: 50px; font-size: 0.72rem; font-weight: 800; }
+.bulletin-card-header { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.bulletin-cat-icon { font-size: 1rem; }
+.bulletin-cat { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.bulletin-title { font-size: 1rem; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+.bulletin-content { font-size: 0.88rem; color: var(--text-mid); line-height: 1.6; white-space: pre-line; margin-bottom: 12px; }
+.bulletin-footer { display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-light); flex-wrap: wrap; gap: 8px; }
+.bulletin-actions { display: flex; gap: 6px; }
+.bulletin-actions button { background: var(--primary-bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 3px 8px; cursor: pointer; font-size: 0.78rem; transition: background 0.1s; }
+.bulletin-actions button:hover { background: var(--border); }
+.btn-danger-sm { color: var(--danger) !important; border-color: var(--danger) !important; }

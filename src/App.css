@@ -1,0 +1,37 @@
+.client-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.client-main {
+  flex: 1;
+}
+
+.client-footer {
+  background: var(--accent);
+  color: rgba(255,255,255,0.75);
+  padding: 20px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.clerk-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.clerk-main {
+  flex: 1;
+  margin-left: 240px;
+  min-height: 100vh;
+  background: var(--primary-bg);
+}
+
+@media (max-width: 768px) {
+  .clerk-main { margin-left: 0; }
+}

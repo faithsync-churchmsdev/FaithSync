@@ -1,0 +1,111 @@
+.donate-page {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 40px 32px;
+}
+
+.donate-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.donate-header h1 { font-size: 2.2rem; margin-bottom: 12px; }
+.donate-header p { color: var(--text-light); font-size: 1.05rem; }
+
+.donate-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.donate-card {
+  animation: slideUp 0.3s ease;
+}
+
+.donate-icon {
+  font-size: 2.5rem;
+  margin-bottom: 16px;
+}
+
+.donate-card h2 {
+  font-size: 1.4rem;
+  margin-bottom: 16px;
+}
+
+.gcash-box {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.gcash-qr {
+  flex-shrink: 0;
+}
+
+.qr-placeholder {
+  width: 120px;
+  height: 120px;
+  background: var(--primary-bg);
+  border: 3px dashed var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-light);
+  font-size: 0.85rem;
+  gap: 4px;
+}
+
+.gcash-details p {
+  margin-bottom: 8px;
+  font-size: 0.95rem;
+  color: var(--text-mid);
+}
+
+.bank-details { display: flex; flex-direction: column; gap: 12px; }
+
+.bank-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--primary-pale);
+  font-size: 0.95rem;
+}
+
+.bank-row span { color: var(--text-light); }
+
+.hours-box {
+  margin-top: 16px;
+  background: var(--primary-bg);
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  color: var(--text-mid);
+  font-size: 0.95rem;
+  line-height: 1.8;
+}
+
+.donate-note { grid-column: 1 / -1; }
+
+.donate-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.donate-list li {
+  background: var(--primary-bg);
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  color: var(--text-mid);
+  font-weight: 700;
+}
+
+@media (max-width: 700px) {
+  .donate-grid { grid-template-columns: 1fr; }
+  .donate-list { grid-template-columns: 1fr; }
+  .donate-note { grid-column: 1; }
+}

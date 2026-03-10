@@ -1,0 +1,28 @@
+.ministry-page { padding: 32px; }
+.ministry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.ministry-header h1 { font-size: 1.8rem; color: var(--accent); margin-bottom: 4px; }
+.ministry-header p { color: var(--text-light); }
+.ministry-filters { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.ministry-modal { max-width: 620px; max-height: 90vh; overflow-y: auto; }
+.checkbox-group { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  background: var(--primary-bg);
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-mid);
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.checkbox-label:hover { background: var(--primary-pale); }

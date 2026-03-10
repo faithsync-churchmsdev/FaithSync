@@ -1,0 +1,154 @@
+.home-page { min-height: 100vh; }
+
+/* Hero */
+.home-hero {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--primary) 50%, var(--primary-light) 100%);
+  padding: 56px 40px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.home-hero::before {
+  content: '';
+  position: absolute;
+  top: -50%; left: -20%;
+  width: 140%; height: 200%;
+  background: radial-gradient(ellipse at center, rgba(255,255,255,0.06) 0%, transparent 60%);
+}
+.home-hero-cross {
+  font-size: 3rem;
+  color: rgba(255,255,255,0.8);
+  margin-bottom: 12px;
+  animation: pulse 3s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.05); opacity: 1; }
+}
+.home-hero-content h1 {
+  font-family: var(--font-heading);
+  font-size: 2.8rem;
+  color: var(--white);
+  margin-bottom: 14px;
+}
+.home-hero-content p {
+  color: rgba(255,255,255,0.85);
+  font-size: 1.1rem;
+  max-width: 580px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+
+/* Container */
+.home-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 32px;
+}
+.home-section { margin-bottom: 44px; }
+
+/* This Week */
+.home-empty-week {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  text-align: center;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.home-empty-week span { font-size: 2.5rem; display: block; margin-bottom: 10px; }
+.home-empty-week p { color: var(--text-light); margin-bottom: 20px; }
+
+.home-week-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.home-week-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.home-week-card:hover {
+  background: var(--primary-pale);
+  transform: translateX(4px);
+  box-shadow: var(--shadow-md);
+}
+.hwc-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+.hwc-info { flex: 1; }
+.hwc-title { font-weight: 700; color: var(--text-dark); font-size: 1rem; margin-bottom: 4px; }
+.hwc-meta { font-size: 0.82rem; color: var(--text-light); }
+.hwc-arrow { color: var(--primary-light); font-size: 1.4rem; font-weight: bold; }
+
+/* Calendar + Legend row */
+.home-cal-row {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.home-cal-main { flex: 1; min-width: 320px; }
+.home-cal-legend { width: 260px; flex-shrink: 0; }
+
+@media (max-width: 900px) {
+  .home-cal-row { flex-direction: column; }
+  .home-cal-legend { width: 100%; }
+  .home-hero-content h1 { font-size: 2rem; }
+  .home-container { padding: 24px 16px; }
+}
+
+/* ── Bulletin Board client ── */
+.home-bulletin-list { display: flex; flex-direction: column; gap: 12px; }
+.home-bulletin-card { background: white; border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: var(--radius); padding: 14px 16px; position: relative; }
+.home-pinned-tag { position: absolute; top: -10px; right: 12px; background: #f0c040; color: #7a5c00; padding: 2px 8px; border-radius: 50px; font-size: 0.7rem; font-weight: 800; }
+.home-bulletin-title { font-weight: 700; font-size: 0.95rem; color: var(--accent); margin-bottom: 4px; }
+.home-bulletin-content { font-size: 0.87rem; color: var(--text-mid); line-height: 1.6; margin-bottom: 6px; white-space: pre-line; }
+.home-bulletin-meta { font-size: 0.75rem; color: var(--text-light); }
+
+/* ── Mass Schedule client ── */
+.home-mass-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.home-mass-day { background: white; border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; }
+.home-mass-day-name { background: linear-gradient(135deg, var(--accent), var(--primary)); color: white; padding: 8px 14px; font-weight: 800; font-size: 0.88rem; }
+.home-mass-slot { padding: 8px 14px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px; }
+.home-mass-slot:last-child { border-bottom: none; }
+.home-mass-slot strong { font-size: 0.9rem; color: var(--primary); }
+.home-mass-slot span { font-size: 0.78rem; color: var(--text-light); }
+
+/* ── Top row: Bulletin + This Week ── */
+.home-top-row { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+.home-top-left { flex: 1 1 340px; min-width: 0; }
+.home-top-right { flex: 1 1 320px; min-width: 0; }
+.home-top-full { flex: 1 1 100%; }
+
+/* Bulletin cards — clickable */
+.home-bulletin-card { cursor: pointer; transition: box-shadow 0.15s, transform 0.1s; position: relative; }
+.home-bulletin-card:hover { box-shadow: 0 4px 16px rgba(26,111,181,0.15); transform: translateY(-2px); }
+.home-bulletin-cat { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light); margin-bottom: 4px; }
+.home-bulletin-preview { font-size: 0.85rem; color: var(--text-mid); line-height: 1.5; margin-bottom: 4px; }
+.home-bulletin-read-more { font-size: 0.78rem; color: var(--primary); font-weight: 600; }
+
+/* Bulletin detail modal */
+.bulletin-detail-modal { max-width: 640px; width: 92vw; padding: 0; overflow: hidden; max-height: 85vh; display: flex; flex-direction: column; }
+.bulletin-detail-header { padding: 20px 24px 16px; position: relative; background: var(--primary-bg); flex-shrink: 0; }
+.bulletin-detail-cat { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.bulletin-detail-title { font-size: 1.25rem; font-weight: 800; color: var(--accent); margin-bottom: 6px; padding-right: 32px; }
+.bulletin-detail-meta { font-size: 0.78rem; color: var(--text-light); }
+.bulletin-detail-header .close-panel { position: absolute; top: 16px; right: 16px; }
+.bulletin-detail-body { padding: 20px 24px; font-size: 0.95rem; color: var(--text-mid); line-height: 1.9; white-space: pre-line; overflow-y: auto; flex: 1; }

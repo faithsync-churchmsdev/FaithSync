@@ -1,0 +1,30 @@
+.schedule-page { padding: 32px; }
+
+.schedule-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.schedule-header h1 { font-size: 1.8rem; color: var(--accent); margin-bottom: 4px; }
+.schedule-header p { color: var(--text-light); }
+
+.schedule-filter { margin-bottom: 16px; }
+
+.schedule-modal { max-width: 580px; max-height: 90vh; overflow-y: auto; }
+
+.row-done { opacity: 0.55; background: #f7f7f7 !important; }
+.badge-done { background: #aaa; color: white; font-size: 0.78rem; padding: 3px 10px; border-radius: 50px; }
+.btn-done {
+  background: #27ae60;
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 700;
+  transition: background 0.15s;
+}
+.btn-done:hover { background: #219150; }

@@ -1,0 +1,43 @@
+.archives-page { padding: 32px; }
+.archives-header { margin-bottom: 24px; }
+.archives-header h1 { font-size: 1.8rem; color: var(--accent); margin-bottom: 4px; }
+.archives-header p { color: var(--text-light); }
+.archives-tabs { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+.arc-count { background: rgba(255,255,255,0.3); padding: 2px 8px; border-radius: 50px; font-size: 0.8rem; margin-left: 6px; }
+.tab-btn .arc-count { background: var(--primary-pale); color: var(--primary); }
+.tab-btn.active .arc-count { background: rgba(255,255,255,0.25); color: white; }
+
+.arc-empty {
+  text-align: center;
+  padding: 60px 20px;
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+}
+.arc-empty span { font-size: 3rem; display: block; margin-bottom: 12px; }
+.arc-empty p { color: var(--text-light); font-size: 1rem; }
+.btn-success {
+  background: #27ae60;
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 700;
+  transition: background 0.15s;
+}
+.btn-success:hover { background: #219150; }
+
+/* ── Archive search ── */
+.arc-search {
+  width: 100%; padding: 10px 16px; border: 1.5px solid var(--border);
+  border-radius: var(--radius); font-size: 0.95rem; margin-bottom: 16px;
+  background: #fff;
+}
+.arc-search:focus { outline: none; border-color: var(--primary); }
+
+/* ── Improved empty state ── */
+.arc-empty-icon { font-size: 3rem; margin-bottom: 10px; }
+.arc-empty small { display: block; color: var(--text-light); font-size: 0.82rem; margin-top: 6px; }
+
+/* ── Date column ── */
+.date-col { font-size: 0.8rem; color: var(--text-light); white-space: nowrap; }

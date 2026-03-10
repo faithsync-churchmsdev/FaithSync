@@ -1,0 +1,191 @@
+.pd-page { padding: 32px; }
+
+.pd-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+.pd-header h1 { font-size: 1.8rem; color: var(--accent); margin-bottom: 4px; }
+.pd-header p { color: var(--text-light); }
+
+.pd-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+.pd-tab {
+  background: var(--white);
+  border: 2px solid var(--border);
+  color: var(--text-mid);
+  padding: 12px 22px;
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pd-tab:hover { background: var(--primary-pale); border-color: var(--primary-light); color: var(--primary); }
+.pd-tab.active { background: var(--primary); border-color: var(--primary); color: var(--white); }
+
+.pd-count {
+  background: rgba(255,255,255,0.25);
+  padding: 2px 8px;
+  border-radius: 50px;
+  font-size: 0.8rem;
+}
+.pd-tab:not(.active) .pd-count { background: var(--primary-pale); color: var(--primary); }
+
+.pd-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.pd-filters { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* Avatars */
+.pd-avatar-sm {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border);
+}
+.pd-avatar-placeholder {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  font-family: var(--font-heading);
+}
+.pd-priest-av { background: var(--accent); }
+
+.pd-avatar-lg {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--border);
+  flex-shrink: 0;
+}
+.pd-avatar-lg-placeholder {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.5rem;
+  font-family: var(--font-heading);
+  flex-shrink: 0;
+}
+
+.pd-photo-upload {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: var(--primary-bg);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+/* Detail Modal */
+.pd-detail-modal { max-width: 560px; }
+.pd-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--primary-pale);
+}
+.pd-detail-header h2 { font-size: 1.3rem; margin-bottom: 4px; }
+
+.pd-detail-body { margin-bottom: 20px; }
+.pd-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.pd-detail-grid div {
+  background: var(--primary-bg);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+}
+.pd-detail-grid span {
+  font-size: 0.78rem;
+  color: var(--text-light);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 4px;
+}
+.pd-detail-grid strong { color: var(--text-dark); font-size: 0.92rem; }
+
+.pd-detail-section { margin-bottom: 14px; }
+.pd-detail-section > span {
+  font-size: 0.78rem;
+  color: var(--text-light);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 6px;
+}
+.pd-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.pd-tag {
+  background: var(--primary-pale);
+  color: var(--primary);
+  padding: 5px 12px;
+  border-radius: 50px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border: 1px solid var(--border);
+}
+
+/* Form Modal */
+.pd-form-modal { max-width: 640px; max-height: 90vh; overflow-y: auto; }
+.form-section-title {
+  font-size: 1rem;
+  color: var(--primary);
+  margin: 20px 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Checkbox group */
+.checkbox-group { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  background: var(--primary-bg);
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-mid);
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.checkbox-label:hover { background: var(--primary-pale); }
