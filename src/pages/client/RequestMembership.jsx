@@ -11,7 +11,7 @@ const defaultForm = {
 const PAGE_SIZE = 6;
 
 export default function RequestMembership() {
-  const { members, addMembershipRequest } = useApp();
+  const { clientMembers, addMembershipRequest, selectedChurch } = useApp();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [submitted, setSubmitted] = useState(false);
@@ -22,7 +22,7 @@ export default function RequestMembership() {
 
   const set = (k,v) => setForm(p => ({...p,[k]:v}));
 
-  const activeMembers = members.filter(m => !m.archived);
+  const activeMembers = (clientMembers || []).filter(m => !m.archived);
   const filtered = activeMembers.filter(m => {
     const nameMatch = `${m.firstName} ${m.lastName}`.toLowerCase().includes(search.toLowerCase());
     const minMatch = !filterMinistry || m.ministry === filterMinistry;
@@ -39,12 +39,13 @@ export default function RequestMembership() {
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (!selectedChurch) { alert('Please select a church first from the banner at the top.'); return; }
     if (!form.lastName || !form.firstName || !form.birthday || !form.email) {
-      alert('Please fill in required fields.');
+      alert('Please fill in required fields (Last Name, First Name, Birthday, Email).');
       return;
     }
-    addMembershipRequest({...form});
+    await addMembershipRequest({...form});
     setSubmitted(true);
     setShowForm(false);
   };

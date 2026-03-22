@@ -330,7 +330,7 @@ const emptyBaptism = {
 };
 
 function BaptismPage() {
-  const { baptisms, addBaptism, archiveBaptism, addEvent } = useApp();
+  const { baptisms, addBaptism, archiveBaptism, addEvent, currentChurch } = useApp();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [search, setSearch] = useState('');
   const [errors, setErrors] = useState({});
@@ -440,7 +440,7 @@ function BaptismPage() {
         <Certificate id="baptism-cert" title="Certificate of Baptism" onClose={()=>setCertRec(null)}>
           <div className="cert-body">
             <div className="cert-title">CERTIFICATE OF BAPTISM</div>
-            <div className="cert-church">Metropolitan Cathedral of the Immaculate Conception<br/>Zamboanga City, Philippines</div>
+            <div className="cert-church">{currentChurch?.church_name || 'Parish Church'}<br/>{currentChurch?.address || 'Philippines'}</div>
             <div className="cert-cross">✝</div>
             <p className="cert-intro">This is to certify that:</p>
             <table className="cert-table"><tbody>
@@ -566,7 +566,7 @@ const emptyFC = {
 };
 
 function FirstCommunionPage() {
-  const { firstCommunions, addFirstCommunion, archiveFirstCommunion, addEvent } = useApp();
+  const { firstCommunions, addFirstCommunion, archiveFirstCommunion, addEvent, currentChurch } = useApp();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [search, setSearch] = useState('');
   const [show, setShow] = useState(false);
@@ -652,7 +652,7 @@ function FirstCommunionPage() {
         <Certificate id="fc-cert" title="Certificate of First Holy Communion" onClose={()=>setCertRec(null)}>
           <div className="cert-body">
             <div className="cert-title">CERTIFICATE OF FIRST HOLY COMMUNION</div>
-            <div className="cert-church">Metropolitan Cathedral of the Immaculate Conception<br/>Zamboanga City, Philippines</div>
+            <div className="cert-church">{currentChurch?.church_name || 'Parish Church'}<br/>{currentChurch?.address || 'Philippines'}</div>
             <div className="cert-cross">✝</div>
             <p className="cert-intro">This is to certify that:</p>
             <table className="cert-table"><tbody>
@@ -766,7 +766,7 @@ const emptyConf = {
 };
 
 function ConfirmationPage() {
-  const { confirmations, addConfirmation, archiveConfirmation, addEvent } = useApp();
+  const { confirmations, addConfirmation, archiveConfirmation, addEvent, currentChurch } = useApp();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [search, setSearch] = useState('');
   const [show, setShow] = useState(false);
@@ -855,7 +855,7 @@ function ConfirmationPage() {
         <Certificate id="conf-cert" title="Certificate of Confirmation" onClose={()=>setCertRec(null)}>
           <div className="cert-body">
             <div className="cert-title">CERTIFICATE OF CONFIRMATION</div>
-            <div className="cert-church">Metropolitan Cathedral of the Immaculate Conception<br/>Zamboanga City, Philippines</div>
+            <div className="cert-church">{currentChurch?.church_name || 'Parish Church'}<br/>{currentChurch?.address || 'Philippines'}</div>
             <div className="cert-cross">✝</div>
             <p className="cert-intro">This is to certify that:</p>
             <table className="cert-table"><tbody>
@@ -991,7 +991,7 @@ const emptyMarriage = {
 };
 
 function MarriagePage() {
-  const { marriages, addMarriage, archiveMarriage, addEvent } = useApp();
+  const { marriages, addMarriage, archiveMarriage, addEvent, currentChurch } = useApp();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [search, setSearch] = useState('');
   const [show, setShow] = useState(false);
@@ -1116,7 +1116,7 @@ function MarriagePage() {
         <Certificate id="marriage-cert" title="Certificate of Marriage" onClose={()=>setCertRec(null)}>
           <div className="cert-body">
             <div className="cert-title">CERTIFICATE OF MARRIAGE</div>
-            <div className="cert-church">Metropolitan Cathedral of the Immaculate Conception<br/>Zamboanga City, Philippines</div>
+            <div className="cert-church">{currentChurch?.church_name || 'Parish Church'}<br/>{currentChurch?.address || 'Philippines'}</div>
             <div className="cert-cross">✝</div>
             <p className="cert-intro">This is to certify that the holy covenant of Matrimony was entered into by:</p>
             <table className="cert-table"><tbody>
@@ -1304,7 +1304,7 @@ const emptyFuneral = {
 };
 
 function FuneralPage() {
-  const { funerals, addFuneral, archiveFuneral, addEvent } = useApp();
+  const { funerals, addFuneral, archiveFuneral, addEvent, currentChurch } = useApp();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [search, setSearch] = useState('');
   const [show, setShow] = useState(false);
@@ -1393,7 +1393,7 @@ function FuneralPage() {
         <Certificate id="funeral-cert" title="Funeral / Burial Record" onClose={()=>setCertRec(null)}>
           <div className="cert-body">
             <div className="cert-title">FUNERAL / BURIAL RECORD</div>
-            <div className="cert-church">Metropolitan Cathedral of the Immaculate Conception<br/>Zamboanga City, Philippines</div>
+            <div className="cert-church">{currentChurch?.church_name || 'Parish Church'}<br/>{currentChurch?.address || 'Philippines'}</div>
             <div className="cert-cross">✝</div>
             <p className="cert-intro">This is to certify that the Funeral Mass was celebrated for:</p>
             <table className="cert-table"><tbody>
@@ -1501,7 +1501,7 @@ function FuneralPage() {
 // REPORTS
 // ══════════════════════════════════════════════════════════════════════════════
 function ReportsPage() {
-  const { baptisms, marriages, funerals, confirmations, firstCommunions } = useApp();
+  const { baptisms, marriages, funerals, confirmations, firstCommunions, currentChurch } = useApp();
   const now = new Date();
   const thisMonth = (arr, key) => (arr||[]).filter(r=>{ const d=new Date(r[key]); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); });
   const active = (arr) => (arr||[]).filter(r=>!r.archived);
@@ -1527,7 +1527,7 @@ function ReportsPage() {
         <h2 style={{margin:0}}>📊 Sacramental Reports</h2>
         <button className="btn-primary" style={{fontSize:'0.88rem'}} onClick={()=>window.print()}>🖨️ Print / Export Report</button>
       </div>
-      <div className="report-church-name">Metropolitan Cathedral of the Immaculate Conception · Zamboanga City, Philippines</div>
+      <div className="report-church-name">{currentChurch?.church_name} · {currentChurch?.address}</div>
       <div className="report-date-line">Generated: {now.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
 
       <h3 style={{margin:'20px 0 12px',color:'var(--primary)'}}>📅 {now.toLocaleDateString('en-US',{month:'long',year:'numeric'})} — This Month</h3>

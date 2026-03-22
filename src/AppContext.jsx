@@ -14,6 +14,7 @@ export function AppProvider({ children }) {
   const [clientEvents, setClientEvents] = useState([]);
   const [clientBulletins, setClientBulletins] = useState([]);
   const [clientMassSchedules, setClientMassSchedules] = useState([]);
+  const [clientMembers, setClientMembers] = useState([]);
   const [events, setEvents] = useState([]);
   const [members, setMembers] = useState([]);
   const [priests, setPriests] = useState([]);
@@ -84,11 +85,12 @@ export function AppProvider({ children }) {
   };
 
   const loadClientData = async (cid) => {
-    // Load into SEPARATE client state — never touches clerk's events/bulletins/massSchedules
-    const [evData, blData, msData] = await Promise.all([
+    // Load into SEPARATE client state — never touches clerk's data
+    const [evData, blData, msData, mbData] = await Promise.all([
       supabase.from('events').select('*').eq('church_id', cid).eq('status', 'approved').eq('archived', false).eq('done', false).order('date'),
       supabase.from('bulletins').select('*').eq('church_id', cid).order('created_at', { ascending: false }),
       supabase.from('mass_schedules').select('*').eq('church_id', cid),
+      supabase.from('members').select('*').eq('church_id', cid).eq('archived', false),
     ]);
     if (evData.data) setClientEvents(evData.data.map(r => ({
       id: r.id, title: r.title, date: r.date, time: r.time,
@@ -102,6 +104,13 @@ export function AppProvider({ children }) {
     if (msData.data) setClientMassSchedules(msData.data.map(r => ({
       id: r.id, day: r.day, time: r.time, type: r.type,
       priest: r.priest, location: r.location, language: r.language, notes: r.notes,
+    })));
+    if (mbData.data) setClientMembers(mbData.data.map(r => ({
+      id: r.id, lastName: r.last_name, firstName: r.first_name, middleName: r.middle_name,
+      gender: r.gender, birthday: r.birthday, ministry: r.ministry,
+      role: r.role, status: r.status, photo: r.photo,
+      skills: r.skills || [], availability: r.availability || [],
+      joined: r.joined, archived: r.archived,
     })));
   };
 
@@ -1122,7 +1131,7 @@ export function AppProvider({ children }) {
       authLoading, loading, logout,
       churches, loadChurches, loadActiveChurches, updateChurchStatus,
       // Client-specific state (separate from clerk state)
-      clientEvents, clientBulletins, clientMassSchedules,
+      clientEvents, clientBulletins, clientMassSchedules, clientMembers,
       events, addEvent, updateEvent, archiveEvent, markEventDone, restoreEvent, deleteEvent,
       members, addMember, updateMember, archiveMember, restoreMember, deleteMember,
       priests, addPriest, updatePriest, archivePriest, restorePriest, deletePriest,
