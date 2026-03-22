@@ -1,80 +1,124 @@
-.login-page {
+.clerk-login-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--primary) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  background: var(--primary-bg);
+  padding: 24px;
 }
 
-.login-card {
-  background: var(--white);
+.clerk-login-card {
+  background: white;
   border-radius: var(--radius-lg);
-  padding: 48px 40px;
+  box-shadow: var(--shadow-md);
   width: 100%;
   max-width: 420px;
-  box-shadow: var(--shadow-lg);
-  animation: slideUp 0.4s ease;
+  border: 1px solid var(--border);
+  border-top: 5px solid var(--primary);
+  overflow: hidden;
 }
 
-.login-brand {
+.clerk-login-header {
+  background: linear-gradient(135deg, var(--accent), var(--primary));
+  padding: 32px 32px 24px;
   text-align: center;
-  margin-bottom: 32px;
+  color: white;
 }
 
-.login-cross {
+.clerk-login-cross {
   font-size: 2.5rem;
-  color: var(--primary);
-  display: block;
   margin-bottom: 8px;
+  opacity: 0.9;
 }
 
-.login-brand h1 {
+.clerk-login-header h1 {
+  font-family: var(--font-heading);
   font-size: 1.8rem;
-  color: var(--accent);
   margin-bottom: 4px;
+  color: white;
 }
 
-.login-brand p {
-  color: var(--text-light);
-  font-size: 0.95rem;
+.clerk-login-header p {
+  font-size: 0.9rem;
+  opacity: 0.85;
 }
 
-.login-error {
+.clerk-login-form {
+  padding: 24px 32px 0;
+}
+
+.clerk-login-error {
   background: #fdecea;
   color: var(--danger);
-  padding: 12px 16px;
-  border-radius: var(--radius-sm);
-  margin-bottom: 20px;
-  font-size: 0.9rem;
-  font-weight: 700;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 0.88rem;
+  margin-bottom: 12px;
   border: 1px solid #f5c6cb;
 }
 
-.login-hint {
-  text-align: center;
-  margin-top: 8px;
-  color: var(--text-light);
+.clerk-login-btn {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+  margin-top: 4px;
 }
 
-/* ── Register form ── */
-.login-card-wide { max-width: 540px; }
-.reg-section-label {
-  font-size: 0.78rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.8px; color: var(--primary); margin: 16px 0 8px;
-  padding-bottom: 4px; border-bottom: 1px solid var(--border);
+.clerk-login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 32px 0;
+  color: var(--text-light);
+  font-size: 0.85rem;
 }
-.reg-success-box {
-  background: #d4edda; border: 1.5px solid #c3e6cb;
-  border-radius: var(--radius); padding: 20px; text-align: center;
-  margin: 12px 0;
+
+.clerk-login-divider::before,
+.clerk-login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
 }
-.reg-success-box h3 { color: #155724; margin-bottom: 6px; }
-.reg-success-box p { color: #155724; font-size: 0.9rem; }
-.btn-outline {
-  background: transparent; color: var(--primary);
-  border: 2px solid var(--primary); border-radius: var(--radius);
-  padding: 10px; font-weight: 700; cursor: pointer;
-  transition: all 0.15s; font-size: 0.9rem;
+
+.clerk-login-register {
+  padding: 16px 32px 0;
+  text-align: center;
 }
-.btn-outline:hover { background: var(--primary); color: white; }
+
+.clerk-login-register p {
+  font-size: 0.85rem;
+  color: var(--text-light);
+  margin-bottom: 10px;
+}
+
+.clerk-register-btn {
+  width: 100%;
+  padding: 10px;
+  font-size: 0.9rem;
+}
+
+.clerk-login-back {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px;
+  background: none;
+  border: none;
+  color: var(--text-light);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: color 0.2s;
+}
+
+.clerk-login-back:hover {
+  color: var(--primary);
+}
+
+.clerk-login-note {
+  padding: 12px 32px 20px;
+  font-size: 0.78rem;
+  color: var(--text-light);
+  text-align: center;
+  line-height: 1.5;
+}

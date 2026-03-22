@@ -40,7 +40,7 @@ export default function RequestMembership() {
   };
 
   const handleSubmit = () => {
-    if (!form.lastName || !form.firstName || !form.birthday) {
+    if (!form.lastName || !form.firstName || !form.birthday || !form.email) {
       alert('Please fill in required fields.');
       return;
     }

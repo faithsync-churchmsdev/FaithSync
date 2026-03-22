@@ -5,7 +5,6 @@ import { useConfirm } from '../../hooks/useConfirm';
 import './RecordsManager.css';
 
 const SUB_PAGES = ['Dashboard','Baptism','First Communion','Confirmation','Marriage','Funeral','Reports'];
-
 const RELIGIONS = ['Catholic', 'Other Christian', 'Non-Christian', 'Unknown'];
 const LOCATIONS = ['Main Chapel','Baptistry','Side Chapel','Parish Hall','Main Church','Function Room','Other (please specify)'];
 const BURIAL_TYPES = ['Cemetery','Mausoleum','Columbarium','Other'];
@@ -26,7 +25,67 @@ const genReg = (prefix, list, dateKey) => {
   return `${prefix}-${y}-${String(count+1).padStart(3,'0')}`;
 };
 
-// ── Printable Certificate ─────────────────────────────────────────────────────
+// ── Auto-calculate 3 Sunday banns from wedding date ───────────────────────────
+const calcBanns = (weddingDate) => {
+  if (!weddingDate) return { banns1Date: '', banns2Date: '', banns3Date: '' };
+  const wedding = new Date(weddingDate);
+  // Find the Sunday before the wedding
+  const dayOfWeek = wedding.getDay(); // 0 = Sunday
+  const daysToLastSunday = dayOfWeek === 0 ? 7 : dayOfWeek;
+  const sunday3 = new Date(wedding);
+  sunday3.setDate(wedding.getDate() - daysToLastSunday);
+  const sunday2 = new Date(sunday3);
+  sunday2.setDate(sunday3.getDate() - 7);
+  const sunday1 = new Date(sunday2);
+  sunday1.setDate(sunday2.getDate() - 7);
+  const fmt = (d) => d.toISOString().split('T')[0];
+  return { banns1Date: fmt(sunday1), banns2Date: fmt(sunday2), banns3Date: fmt(sunday3) };
+};
+
+// ── File upload helper ─────────────────────────────────────────────────────────
+function FileUpload({ label, value, onChange, accept = '.pdf,.jpg,.jpeg,.png' }) {
+  const [fileName, setFileName] = useState(value ? 'File attached' : '');
+  const handleFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => { onChange(reader.result); setFileName(file.name); };
+    reader.readAsDataURL(file);
+  };
+  const handleRemove = () => { onChange(''); setFileName(''); };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+      {!value ? (
+        <label style={{ cursor: 'pointer', background: 'var(--primary-pale)', border: '1px solid var(--primary-light)', color: 'var(--primary)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', fontSize: '0.78rem', fontWeight: '700' }}>
+          📎 Upload {label}
+          <input type="file" accept={accept} onChange={handleFile} style={{ display: 'none' }} />
+        </label>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ fontSize: '0.78rem', color: 'var(--success)', fontWeight: '700' }}>✅ {fileName}</span>
+          <button type="button" onClick={handleRemove} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: '700' }}>✕ Remove</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── View uploaded file ─────────────────────────────────────────────────────────
+function ViewFile({ label, value }) {
+  if (!value) return null;
+  const isImage = value.startsWith('data:image');
+  return (
+    <div style={{ marginTop: '8px' }}>
+      <p style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--primary)', marginBottom: '4px' }}>📎 {label}</p>
+      {isImage
+        ? <img src={value} alt={label} style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }} />
+        : <a href={value} download={label} style={{ fontSize: '0.82rem', color: 'var(--primary)', fontWeight: '700' }}>⬇️ Download {label}</a>
+      }
+    </div>
+  );
+}
+
+// ── Certificate modal ──────────────────────────────────────────────────────────
 function Certificate({ id, title, onClose, children }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -41,21 +100,14 @@ function Certificate({ id, title, onClose, children }) {
         <div className="cert-wrap">
           <div id={id} className="certificate-doc">{children}</div>
         </div>
-        <p className="cert-tip">💡 Tip: Click "Print / Save PDF" → choose "Save as PDF" in the print dialog to download.</p>
-        <style>{`
-          @media print {
-            body * { visibility: hidden; }
-            #${id}, #${id} * { visibility: visible; }
-            #${id} { position:absolute; left:0; top:0; width:100%; }
-            .cert-top-bar, .cert-tip { display:none !important; }
-          }
-        `}</style>
+        <p className="cert-tip">💡 Tip: Click "Print / Save PDF" → choose "Save as PDF" in the print dialog.</p>
+        <style>{`@media print { body * { visibility: hidden; } #${id}, #${id} * { visibility: visible; } #${id} { position:absolute; left:0; top:0; width:100%; } .cert-top-bar, .cert-tip { display:none !important; } }`}</style>
       </div>
     </div>
   );
 }
 
-// ── View Modal wrapper ────────────────────────────────────────────────────────
+// ── View Modal ─────────────────────────────────────────────────────────────────
 function ViewModal({ color, icon, title, subtitle, onClose, children }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -72,7 +124,6 @@ function ViewModal({ color, icon, title, subtitle, onClose, children }) {
   );
 }
 
-// ── Detail item ───────────────────────────────────────────────────────────────
 function D({ label, value }) {
   return (
     <div className="rec-detail-item">
@@ -82,15 +133,13 @@ function D({ label, value }) {
   );
 }
 
-// ── Section label ─────────────────────────────────────────────────────────────
 function SL({ children }) {
   return <div className="form-section-label">{children}</div>;
 }
 
-// ── Priest dropdown ───────────────────────────────────────────────────────────
 function PriestSelect({ value, onChange, customValue, onCustomChange }) {
   const { priests } = useApp();
-  const active = priests.filter(p => !p.archived && p.status === 'Active');
+  const active = (priests || []).filter(p => !p.archived && p.status === 'Active');
   return (
     <>
       <select value={value} onChange={onChange}>
@@ -103,12 +152,11 @@ function PriestSelect({ value, onChange, customValue, onCustomChange }) {
   );
 }
 
-// ── Parishioner quick-select from Parish Directory ────────────────────────────
 function ParishionerSelect({ label = 'Select Parishioner from Directory', onSelect }) {
   const { parishioners } = useApp();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const active = parishioners.filter(p => !p.archived);
+  const active = (parishioners || []).filter(p => !p.archived);
   const filtered = !query ? active : active.filter(p =>
     `${p.firstName} ${p.lastName}`.toLowerCase().includes(query.toLowerCase())
   );
@@ -135,7 +183,6 @@ function ParishionerSelect({ label = 'Select Parishioner from Directory', onSele
   );
 }
 
-
 function LocationSelect({ value, onChange, customValue, onCustomChange }) {
   return (
     <>
@@ -147,14 +194,10 @@ function LocationSelect({ value, onChange, customValue, onCustomChange }) {
   );
 }
 
-// ── Search bar ────────────────────────────────────────────────────────────────
 function SearchBar({ value, onChange }) {
-  return (
-    <input className="search-bar" placeholder="🔍 Search records..." value={value} onChange={e => onChange(e.target.value)} />
-  );
+  return <input className="search-bar" placeholder="🔍 Search records..." value={value} onChange={e => onChange(e.target.value)} />;
 }
 
-// ── Table action buttons ──────────────────────────────────────────────────────
 function RecordActions({ onView, onEdit, onPrint, onArchive }) {
   return (
     <div className="rec-actions" onClick={e=>e.stopPropagation()}>
@@ -166,14 +209,14 @@ function RecordActions({ onView, onEdit, onPrint, onArchive }) {
   );
 }
 
-// ── Mass scheduling helper ────────────────────────────────────────────────────
+// ── Mass scheduling (only used for optional separate mass) ────────────────────
 function MassScheduleFields({ scheduleMass, onChange, massDate, massTime, massLocation, customLocation, onCustomLocation }) {
   return (
     <div className="mass-schedule-box">
-      <SL>⛪ Schedule Mass for This?</SL>
+      <SL>⛪ Schedule a Separate Mass for This?</SL>
       <label className="check-label">
         <input type="checkbox" checked={scheduleMass} onChange={e=>onChange('scheduleMass',e.target.checked)} style={{width:'auto'}} />
-        Yes, add this to the parish calendar
+        Add this to the parish calendar as a separate mass event
       </label>
       {scheduleMass && (
         <div className="form-row" style={{marginTop:'10px'}}>
@@ -192,21 +235,6 @@ function MassScheduleFields({ scheduleMass, onChange, massDate, massTime, massLo
 // ══════════════════════════════════════════════════════════════════════════════
 export default function RecordsManager() {
   const [sub, setSub] = useState('Dashboard');
-  const { baptisms, confirmations, firstCommunions, marriages, funerals, parishioners } = useApp();
-
-  const renderSub = () => {
-    switch(sub) {
-      case 'Dashboard': return <RecordsDashboard setSub={setSub} />;
-      case 'Baptism': return <BaptismPage />;
-      case 'First Communion': return <FirstCommunionPage />;
-      case 'Confirmation': return <ConfirmationPage />;
-      case 'Marriage': return <MarriagePage />;
-      case 'Funeral': return <FuneralPage />;
-      case 'Reports': return <ReportsPage />;
-      default: return null;
-    }
-  };
-
   return (
     <div className="records-page">
       <div className="records-subnav">
@@ -214,7 +242,15 @@ export default function RecordsManager() {
           <button key={s} className={`subnav-btn${sub===s?' active':''}`} onClick={()=>setSub(s)}>{s}</button>
         ))}
       </div>
-      <div className="records-content">{renderSub()}</div>
+      <div className="records-content">
+        {sub === 'Dashboard' && <RecordsDashboard setSub={setSub} />}
+        {sub === 'Baptism' && <BaptismPage />}
+        {sub === 'First Communion' && <FirstCommunionPage />}
+        {sub === 'Confirmation' && <ConfirmationPage />}
+        {sub === 'Marriage' && <MarriagePage />}
+        {sub === 'Funeral' && <FuneralPage />}
+        {sub === 'Reports' && <ReportsPage />}
+      </div>
     </div>
   );
 }
@@ -222,9 +258,9 @@ export default function RecordsManager() {
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function RecordsDashboard({ setSub }) {
   const { baptisms, confirmations, firstCommunions, marriages, funerals, parishioners } = useApp();
-  const active = (arr) => arr.filter(r=>!r.archived);
+  const active = (arr) => (arr||[]).filter(r=>!r.archived);
   const now = new Date();
-  const thisMonth = (arr, key) => arr.filter(r => {
+  const thisMonth = (arr, key) => (arr||[]).filter(r => {
     const d = new Date(r[key]); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
   });
   const stats = [
@@ -233,7 +269,7 @@ function RecordsDashboard({ setSub }) {
     { label:'Confirmations', value:active(confirmations).length, icon:'🕊️', sub:'Confirmation', color:'#7c4dab' },
     { label:'Marriages', value:active(marriages).length, icon:'💍', sub:'Marriage', color:'#c0392b' },
     { label:'Funeral Records', value:active(funerals).length, icon:'🕯️', sub:'Funeral', color:'#555e6e' },
-    { label:'Parishioners', value:parishioners.filter(p=>!p.archived).length, icon:'👥', sub:null, color:'#27ae60' },
+    { label:'Parishioners', value:(parishioners||[]).filter(p=>!p.archived).length, icon:'👥', sub:null, color:'#27ae60' },
   ];
   const recentBaptisms = [...active(baptisms)].sort((a,b)=>new Date(b.baptismDate)-new Date(a.baptismDate)).slice(0,3);
   const recentMarriages = [...active(marriages)].sort((a,b)=>new Date(b.weddingDate)-new Date(a.weddingDate)).slice(0,3);
@@ -286,16 +322,16 @@ const emptyBaptism = {
   parentsAddress:'', parentsPhone:'', parentsMarriedInChurch:true,
   godparents:[{name:'',gender:'male',religion:'Catholic'}],
   baptismDate:'', baptismTime:'', location:LOCATIONS[0], customLocation:'',
-  priest:'', customPriest:'', includeMass:true,
+  priest:'', customPriest:'',
   birthCertificateSubmitted:false, marriageCertificateSubmitted:false,
-  registerNumber:'', certificateIssued:false, status:'application', notes:'',
+  birthCertFile:'', marriageCertFile:'',
+  certificateIssued:false, status:'application', notes:'',
   scheduleMass:false, massDate:'', massTime:'', massLocation:LOCATIONS[0], customMassLocation:''
 };
 
 function BaptismPage() {
-  const { baptisms, addBaptism, archiveBaptism } = useApp();
+  const { baptisms, addBaptism, archiveBaptism, addEvent } = useApp();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
-  const { addEvent } = useApp();
   const [search, setSearch] = useState('');
   const [errors, setErrors] = useState({});
   const [show, setShow] = useState(false);
@@ -303,15 +339,16 @@ function BaptismPage() {
   const [certRec, setCertRec] = useState(null);
   const [f, setF] = useState(emptyBaptism);
   const set = (k,v) => { setF(p=>({...p,[k]:v})); setErrors(p=>({...p,[k]:''})); };
+  const isEdit = !!f.id;
 
-  const records = baptisms.filter(b=>!b.archived && (
+  const records = (baptisms||[]).filter(b=>!b.archived && (
     !search || b.childName?.toLowerCase().includes(search.toLowerCase()) ||
     b.fatherName?.toLowerCase().includes(search.toLowerCase()) ||
     b.motherName?.toLowerCase().includes(search.toLowerCase()) ||
     b.registerNumber?.toLowerCase().includes(search.toLowerCase())
   ));
 
-  const openAdd = () => { setF({...emptyBaptism, registerNumber:genReg('B',baptisms.filter(b=>!b.archived),'baptismDate')}); setShow(true); };
+  const openAdd = () => { setF({...emptyBaptism, registerNumber:genReg('B',(baptisms||[]).filter(b=>!b.archived),'baptismDate')}); setShow(true); };
   const openEdit = (r) => { setF({...emptyBaptism,...r, customPriest:'', customLocation:'', customMassLocation:''}); setShow(true); };
 
   const addGP = () => setF(p=>({...p,godparents:[...p.godparents,{name:'',gender:'male',religion:'Catholic'}]}));
@@ -343,19 +380,16 @@ function BaptismPage() {
       <SearchBar value={search} onChange={setSearch} />
       <div className="card" style={{overflowX:'auto',marginTop:'12px'}}>
         <table>
-          <thead><tr><th>Register No.</th><th>Child's Name</th><th>Baptism Date</th><th>Time</th><th>Parents</th><th>Godparents</th><th>Location</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Register No.</th><th>Child's Name</th><th>Baptism Date</th><th>Parents</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
             {records.length===0
-              ? <tr><td colSpan={9} className="empty-td">No baptism records found. Click "Record New Baptism" to add one.</td></tr>
+              ? <tr><td colSpan={6} className="empty-td">No baptism records found. Click "Record New Baptism" to add one.</td></tr>
               : records.map(r=>(
                 <tr key={r.id} className="clickable-row" onClick={()=>setViewRec(r)}>
                   <td><strong>{r.registerNumber||'Pending'}</strong></td>
                   <td>{r.childName}</td>
                   <td>{r.baptismDate}</td>
-                  <td>{r.baptismTime||'—'}</td>
                   <td>{r.fatherName||'—'} & {r.motherName||'—'}</td>
-                  <td>{r.godparents?.length||0} godparent{r.godparents?.length!==1?'s':''}</td>
-                  <td>{r.location}</td>
                   <td><span className={`badge ${r.certificateIssued?'badge-active':'badge-pending'}`}>{r.certificateIssued?'Cert. Issued':'Pending'}</span></td>
                   <td><RecordActions onView={()=>setViewRec(r)} onEdit={()=>openEdit(r)} onPrint={()=>setCertRec(r)} onArchive={()=>doArchive(r)} /></td>
                 </tr>
@@ -385,9 +419,12 @@ function BaptismPage() {
             <D label="Godparents" value={viewRec.godparents?.map(g=>`${g.name} (${g.gender==='male'?'Ninong':'Ninang'})`).join(', ')} />
             <D label="Birth Cert." value={viewRec.birthCertificateSubmitted?'✅ Submitted':'❌ Pending'} />
             <D label="Marriage Cert." value={viewRec.marriageCertificateSubmitted?'✅ Submitted':'❌ Pending'} />
-            <D label="Certificate" value={viewRec.certificateIssued?'✅ Issued':'Pending'} />
-            <D label="Mass Scheduled" value={viewRec.scheduleMass?`✅ ${viewRec.massDate} ${viewRec.massTime}`:'❌ No'} />
-            {viewRec.notes && <D label="Notes" value={viewRec.notes} />}
+            <D label="Certificate Issued" value={viewRec.certificateIssued?'✅ Issued':'Pending'} />
+          </div>
+          {/* Show uploaded documents */}
+          <div style={{marginTop:'12px'}}>
+            <ViewFile label="Birth Certificate" value={viewRec.birthCertFile} />
+            <ViewFile label="Parents' Marriage Certificate" value={viewRec.marriageCertFile} />
           </div>
           <div style={{display:'flex',gap:'10px',marginTop:'16px',flexWrap:'wrap'}}>
             <button className="btn-primary" onClick={()=>{setViewRec(null);setCertRec(viewRec);}}>📜 View Certificate</button>
@@ -428,43 +465,29 @@ function BaptismPage() {
         <div className="modal-overlay" onClick={()=>setShow(false)}>
           <div className="modal rec-form-modal" onClick={e=>e.stopPropagation()}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
-              <h2>{f.id?'✏️ Edit Baptism Record':'💧 Record New Baptism'}</h2>
+              <h2>{isEdit?'✏️ Edit Baptism Record':'💧 Record New Baptism'}</h2>
               <button className="close-panel" onClick={()=>setShow(false)}>✕</button>
             </div>
-
-            {!f.id && (
-              <div className="register-badge">
-                <span>📋 Auto Register Number:</span>
-                <strong>{f.registerNumber}</strong>
-                <small>This will be assigned to this baptism record.</small>
-              </div>
-            )}
+            {!isEdit && <div className="register-badge"><span>📋 Auto Register Number:</span><strong>{f.registerNumber}</strong></div>}
 
             <SL>👶 Child's Information</SL>
-            <ParishionerSelect label="Auto-fill Child from Parish Directory" onSelect={p => {
-              set('childName', `${p.firstName} ${p.lastName}`);
-              set('childBirthDate', p.birthdate || '');
-              set('childBirthPlace', p.birthplace || '');
-              set('childGender', p.sex || '');
-              set('fatherName', p.fatherName || '');
-              set('motherName', p.motherName || '');
-            }} />
+            <ParishionerSelect label="Auto-fill Child from Parish Directory" onSelect={p => { set('childName',`${p.firstName} ${p.lastName}`); set('childBirthDate',p.birthdate||''); set('childBirthPlace',p.birthplace||''); set('childGender',p.sex||''); set('fatherName',p.fatherName||''); set('motherName',p.motherName||''); }} />
             <div className="form-row">
               <div className="form-group"><label>Child's Full Name *</label><input placeholder="e.g., Juan Carlos Dela Cruz" value={f.childName} onChange={e=>set('childName',e.target.value)} /></div>
-              <div className="form-group"><label>Gender *</label><select value={f.childGender} onChange={e=>set('childGender',e.target.value)}><option value="">Select</option><option value="Male">Male</option><option value="Female">Female</option></select></div>
+              <div className="form-group"><label>Gender</label><select value={f.childGender} onChange={e=>set('childGender',e.target.value)}><option value="">Select</option><option>Male</option><option>Female</option></select></div>
             </div>
             <div className="form-row">
-              <div className="form-group"><label>Date of Birth *</label><input type="date" value={f.childBirthDate} onChange={e=>set('childBirthDate',e.target.value)} /></div>
+              <div className="form-group"><label>Date of Birth</label><input type="date" value={f.childBirthDate} onChange={e=>set('childBirthDate',e.target.value)} /></div>
               <div className="form-group"><label>Place of Birth</label><input placeholder="e.g., Zamboanga City Medical Center" value={f.childBirthPlace} onChange={e=>set('childBirthPlace',e.target.value)} /></div>
             </div>
 
             <SL>👨‍👩‍👦 Parents' Information</SL>
             <div className="form-row">
-              <div className="form-group"><label>Father's Full Name *</label><input placeholder="e.g., Roberto Santos" value={f.fatherName} onChange={e=>set('fatherName',e.target.value)} /></div>
+              <div className="form-group"><label>Father's Full Name</label><input value={f.fatherName} onChange={e=>set('fatherName',e.target.value)} /></div>
               <div className="form-group"><label>Father's Religion</label><select value={f.fatherReligion} onChange={e=>set('fatherReligion',e.target.value)}>{RELIGIONS.map(r=><option key={r}>{r}</option>)}</select></div>
             </div>
             <div className="form-row">
-              <div className="form-group"><label>Mother's Full Name *</label><input placeholder="e.g., Maria Santos" value={f.motherName} onChange={e=>set('motherName',e.target.value)} /></div>
+              <div className="form-group"><label>Mother's Full Name</label><input value={f.motherName} onChange={e=>set('motherName',e.target.value)} /></div>
               <div className="form-group"><label>Mother's Religion</label><select value={f.motherReligion} onChange={e=>set('motherReligion',e.target.value)}>{RELIGIONS.map(r=><option key={r}>{r}</option>)}</select></div>
             </div>
             <div className="form-row">
@@ -493,12 +516,24 @@ function BaptismPage() {
             </div>
             <div className="form-group"><label>Location</label><LocationSelect value={f.location} onChange={e=>set('location',e.target.value)} customValue={f.customLocation} onCustomChange={e=>set('customLocation',e.target.value)} /></div>
             <div className="form-group"><label>Officiating Priest</label><PriestSelect value={f.priest} onChange={e=>set('priest',e.target.value)} customValue={f.customPriest} onCustomChange={e=>set('customPriest',e.target.value)} /></div>
-            <label className="check-label"><input type="checkbox" checked={f.includeMass} onChange={e=>set('includeMass',e.target.checked)} style={{width:'auto'}} /> Include Mass with Baptism</label>
 
             <SL>📄 Documents Submitted</SL>
-            <label className="check-label"><input type="checkbox" checked={f.birthCertificateSubmitted} onChange={e=>set('birthCertificateSubmitted',e.target.checked)} style={{width:'auto'}} /> Birth Certificate Submitted</label>
-            <label className="check-label"><input type="checkbox" checked={f.marriageCertificateSubmitted} onChange={e=>set('marriageCertificateSubmitted',e.target.checked)} style={{width:'auto'}} /> Parents' Marriage Certificate Submitted</label>
-            <label className="check-label"><input type="checkbox" checked={f.certificateIssued} onChange={e=>set('certificateIssued',e.target.checked)} style={{width:'auto'}} /> Baptism Certificate Issued</label>
+            <div style={{marginBottom:'10px'}}>
+              <label className="check-label"><input type="checkbox" checked={f.birthCertificateSubmitted} onChange={e=>set('birthCertificateSubmitted',e.target.checked)} style={{width:'auto'}} /> Birth Certificate Submitted</label>
+              {f.birthCertificateSubmitted && <FileUpload label="Birth Certificate" value={f.birthCertFile} onChange={v=>set('birthCertFile',v)} />}
+            </div>
+            <div style={{marginBottom:'10px'}}>
+              <label className="check-label"><input type="checkbox" checked={f.marriageCertificateSubmitted} onChange={e=>set('marriageCertificateSubmitted',e.target.checked)} style={{width:'auto'}} /> Parents' Marriage Certificate Submitted</label>
+              {f.marriageCertificateSubmitted && <FileUpload label="Marriage Certificate" value={f.marriageCertFile} onChange={v=>set('marriageCertFile',v)} />}
+            </div>
+
+            {/* Certificate Issued — only when editing */}
+            {isEdit && (
+              <div style={{background:'var(--primary-pale)',border:'1px solid var(--primary-light)',borderRadius:'var(--radius)',padding:'10px 14px',marginBottom:'12px'}}>
+                <SL>📜 Certificate Status</SL>
+                <label className="check-label"><input type="checkbox" checked={f.certificateIssued} onChange={e=>set('certificateIssued',e.target.checked)} style={{width:'auto'}} /> Baptism Certificate Issued to Family</label>
+              </div>
+            )}
 
             <MassScheduleFields scheduleMass={f.scheduleMass} onChange={set} massDate={f.massDate} massTime={f.massTime} massLocation={f.massLocation} customLocation={f.customMassLocation} onCustomLocation={e=>set('customMassLocation',e.target.value)} />
 
@@ -526,6 +561,7 @@ const emptyFC = {
   catechismClass:'', catechismTeacher:'', classesCompleted:false, retreatAttended:false,
   firstCommunionDate:'', firstCommunionMass:'', celebrantPriest:'', customPriest:'',
   godparents:'', notes:'', registerNumber:'', certificateIssued:false, status:'registered',
+  baptismCertFile:'',
   scheduleMass:false, massDate:'', massTime:'', massLocation:LOCATIONS[0], customMassLocation:''
 };
 
@@ -533,24 +569,23 @@ function FirstCommunionPage() {
   const { firstCommunions, addFirstCommunion, archiveFirstCommunion, addEvent } = useApp();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [search, setSearch] = useState('');
-  const [errors, setErrors] = useState({});
   const [show, setShow] = useState(false);
   const [viewRec, setViewRec] = useState(null);
   const [certRec, setCertRec] = useState(null);
   const [f, setF] = useState(emptyFC);
-  const set = (k,v) => { setF(p=>({...p,[k]:v})); setErrors(p=>({...p,[k]:''})); };
+  const set = (k,v) => setF(p=>({...p,[k]:v}));
+  const isEdit = !!f.id;
 
-  const records = firstCommunions.filter(r=>!r.archived && (
+  const records = (firstCommunions||[]).filter(r=>!r.archived && (
     !search || r.childName?.toLowerCase().includes(search.toLowerCase()) ||
-    r.fatherName?.toLowerCase().includes(search.toLowerCase()) ||
     r.registerNumber?.toLowerCase().includes(search.toLowerCase())
   ));
 
-  const openAdd = () => { setF({...emptyFC, registerNumber:genReg('FC',firstCommunions.filter(r=>!r.archived),'firstCommunionDate')}); setShow(true); };
+  const openAdd = () => { setF({...emptyFC, registerNumber:genReg('FC',(firstCommunions||[]).filter(r=>!r.archived),'firstCommunionDate')}); setShow(true); };
   const openEdit = (r) => { setF({...emptyFC,...r, customPriest:'', customMassLocation:''}); setShow(true); };
 
   const handleSubmit = () => {
-    if(!f.childName||!f.firstCommunionDate){ setErrors({childName:!f.childName?'Required':'',firstCommunionDate:!f.firstCommunionDate?'Required':''}); return; }
+    if(!f.childName||!f.firstCommunionDate){ alert('Fill required fields.'); return; }
     const priest = f.celebrantPriest==='manual' ? f.customPriest : f.celebrantPriest;
     const record = {...f, celebrantPriest:priest, id:f.id||Date.now(), archived:false};
     addFirstCommunion(record);
@@ -573,10 +608,10 @@ function FirstCommunionPage() {
       <SearchBar value={search} onChange={setSearch} />
       <div className="card" style={{overflowX:'auto',marginTop:'12px'}}>
         <table>
-          <thead><tr><th>Register No.</th><th>Child's Name</th><th>Communion Date</th><th>Priest</th><th>Catechism</th><th>Retreat</th><th>Certificate</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Register No.</th><th>Child's Name</th><th>Communion Date</th><th>Priest</th><th>Catechism</th><th>Certificate</th><th>Actions</th></tr></thead>
           <tbody>
             {records.length===0
-              ? <tr><td colSpan={8} className="empty-td">No First Communion records yet. Click "Register New" to add one.</td></tr>
+              ? <tr><td colSpan={7} className="empty-td">No First Communion records yet.</td></tr>
               : records.map(r=>(
                 <tr key={r.id} className="clickable-row" onClick={()=>setViewRec(r)}>
                   <td><strong>{r.registerNumber||'Pending'}</strong></td>
@@ -584,7 +619,6 @@ function FirstCommunionPage() {
                   <td>{r.firstCommunionDate}</td>
                   <td>{r.celebrantPriest||'—'}</td>
                   <td>{r.classesCompleted?'✅ Done':'❌ Pending'}</td>
-                  <td>{r.retreatAttended?'✅ Yes':'❌ No'}</td>
                   <td><span className={`badge ${r.certificateIssued?'badge-active':'badge-pending'}`}>{r.certificateIssued?'Issued':'Pending'}</span></td>
                   <td><RecordActions onView={()=>setViewRec(r)} onEdit={()=>openEdit(r)} onPrint={()=>setCertRec(r)} onArchive={()=>doArchive(r)} /></td>
                 </tr>
@@ -598,22 +632,13 @@ function FirstCommunionPage() {
           <div className="rec-detail-grid">
             <D label="Register No." value={viewRec.registerNumber} />
             <D label="Child's Name" value={viewRec.childName} />
-            <D label="Birth Date" value={viewRec.childBirthDate} />
-            <D label="Gender" value={viewRec.childGender} />
             <D label="Communion Date" value={viewRec.firstCommunionDate} />
-            <D label="Mass" value={viewRec.firstCommunionMass} />
             <D label="Priest" value={viewRec.celebrantPriest} />
-            <D label="Baptism Date" value={viewRec.baptismDate} />
-            <D label="Baptism Church" value={viewRec.baptismChurch} />
-            <D label="Father" value={viewRec.fatherName} />
-            <D label="Mother" value={viewRec.motherName} />
-            <D label="Contact" value={viewRec.parentsPhone} />
-            <D label="Catechism Teacher" value={viewRec.catechismTeacher} />
             <D label="Classes Completed" value={viewRec.classesCompleted?'✅ Yes':'❌ No'} />
             <D label="Retreat Attended" value={viewRec.retreatAttended?'✅ Yes':'❌ No'} />
             <D label="Certificate" value={viewRec.certificateIssued?'✅ Issued':'Pending'} />
-            <D label="Mass Scheduled" value={viewRec.scheduleMass?`✅ ${viewRec.massDate}`:'❌ No'} />
           </div>
+          <ViewFile label="Baptismal Certificate" value={viewRec.baptismCertFile} />
           <div style={{display:'flex',gap:'10px',marginTop:'16px',flexWrap:'wrap'}}>
             <button className="btn-primary" onClick={()=>{setViewRec(null);setCertRec(viewRec);}}>📜 View Certificate</button>
             <button className="btn-secondary" onClick={()=>{setViewRec(null);openEdit(viewRec);}}>✏️ Edit</button>
@@ -636,9 +661,8 @@ function FirstCommunionPage() {
               <tr><td className="cl">Father</td><td className="cv">{certRec.fatherName||'N/A'}</td></tr>
               <tr><td className="cl">Mother</td><td className="cv">{certRec.motherName||'N/A'}</td></tr>
               <tr><td className="cl">Baptism Date</td><td className="cv">{certRec.baptismDate||'N/A'}</td></tr>
-              <tr><td className="cl">Baptism Church</td><td className="cv">{certRec.baptismChurch||'N/A'}</td></tr>
             </tbody></table>
-            <p className="cert-main">received the Sacrament of First Holy Communion<br/>on the <strong>{ordinalDate(certRec.firstCommunionDate)}</strong><br/>at <strong>{certRec.baptismChurch||'N/A'}</strong>.</p>
+            <p className="cert-main">received the Sacrament of First Holy Communion<br/>on the <strong>{ordinalDate(certRec.firstCommunionDate)}</strong>.</p>
             <div className="cert-footer">
               <div className="cert-sig"><div className="cert-sig-line"/><div>Celebrant Priest<br/><strong>{certRec.celebrantPriest||'To be assigned'}</strong></div></div>
               <div className="cert-reg">Register No.: <strong>{certRec.registerNumber||'Pending'}</strong><br/>Issued: {new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
@@ -651,23 +675,19 @@ function FirstCommunionPage() {
         <div className="modal-overlay" onClick={()=>setShow(false)}>
           <div className="modal rec-form-modal" onClick={e=>e.stopPropagation()}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
-              <h2>{f.id?'✏️ Edit Record':'🍞 Register First Communion'}</h2>
+              <h2>{isEdit?'✏️ Edit Record':'🍞 Register First Communion'}</h2>
               <button className="close-panel" onClick={()=>setShow(false)}>✕</button>
             </div>
-            {!f.id && <div className="register-badge"><span>📋 Auto Register Number:</span><strong>{f.registerNumber}</strong></div>}
+            {!isEdit && <div className="register-badge"><span>📋 Auto Register Number:</span><strong>{f.registerNumber}</strong></div>}
+
             <SL>👶 Child's Information</SL>
-            <ParishionerSelect label="Auto-fill Child from Parish Directory" onSelect={p => {
-              set('childName', `${p.firstName} ${p.lastName}`);
-              set('childBirthDate', p.birthdate || '');
-              set('childGender', p.sex || '');
-              set('fatherName', p.fatherName || '');
-              set('motherName', p.motherName || '');
-            }} />
+            <ParishionerSelect label="Auto-fill Child from Parish Directory" onSelect={p => { set('childName',`${p.firstName} ${p.lastName}`); set('childBirthDate',p.birthdate||''); set('childGender',p.sex||''); set('fatherName',p.fatherName||''); set('motherName',p.motherName||''); }} />
             <div className="form-row">
-              <div className="form-group"><label>Child's Full Name *</label><input value={f.childName} onChange={e=>set('childName',e.target.value)} placeholder="e.g., Maria Santos" /></div>
+              <div className="form-group"><label>Child's Full Name *</label><input value={f.childName} onChange={e=>set('childName',e.target.value)} /></div>
               <div className="form-group"><label>Gender</label><select value={f.childGender} onChange={e=>set('childGender',e.target.value)}><option value="">Select</option><option>Male</option><option>Female</option></select></div>
             </div>
             <div className="form-group"><label>Date of Birth</label><input type="date" value={f.childBirthDate} onChange={e=>set('childBirthDate',e.target.value)} /></div>
+
             <SL>👨‍👩‍👦 Parents</SL>
             <div className="form-row">
               <div className="form-group"><label>Father's Name</label><input value={f.fatherName} onChange={e=>set('fatherName',e.target.value)} /></div>
@@ -677,11 +697,19 @@ function FirstCommunionPage() {
               <div className="form-group"><label>Address</label><input value={f.parentsAddress} onChange={e=>set('parentsAddress',e.target.value)} /></div>
               <div className="form-group"><label>Phone</label><input value={f.parentsPhone} onChange={e=>set('parentsPhone',e.target.value)} /></div>
             </div>
+
             <SL>💧 Baptism Information</SL>
             <div className="form-row">
               <div className="form-group"><label>Baptism Date</label><input type="date" value={f.baptismDate} onChange={e=>set('baptismDate',e.target.value)} /></div>
               <div className="form-group"><label>Baptism Church</label><select value={f.baptismChurch} onChange={e=>set('baptismChurch',e.target.value)}>{LOCATIONS.map(l=><option key={l}>{l}</option>)}</select></div>
             </div>
+
+            <SL>📄 Documents Submitted</SL>
+            <div style={{marginBottom:'10px'}}>
+              <label className="check-label"><input type="checkbox" checked={!!f.baptismCertFile} readOnly style={{width:'auto'}} /> Baptismal Certificate</label>
+              <FileUpload label="Baptismal Certificate" value={f.baptismCertFile} onChange={v=>set('baptismCertFile',v)} />
+            </div>
+
             <SL>📚 Catechism Preparation</SL>
             <div className="form-row">
               <div className="form-group"><label>Class / Group</label><input value={f.catechismClass} onChange={e=>set('catechismClass',e.target.value)} placeholder="e.g., Group A" /></div>
@@ -689,13 +717,21 @@ function FirstCommunionPage() {
             </div>
             <label className="check-label"><input type="checkbox" checked={f.classesCompleted} onChange={e=>set('classesCompleted',e.target.checked)} style={{width:'auto'}} /> All Catechism Classes Completed</label>
             <label className="check-label"><input type="checkbox" checked={f.retreatAttended} onChange={e=>set('retreatAttended',e.target.checked)} style={{width:'auto'}} /> Retreat Attended</label>
+
             <SL>🍞 First Communion Details</SL>
             <div className="form-row">
               <div className="form-group"><label>Communion Date *</label><input type="date" value={f.firstCommunionDate} onChange={e=>set('firstCommunionDate',e.target.value)} /></div>
               <div className="form-group"><label>Mass Type</label><input placeholder="e.g., Sunday 9AM Mass" value={f.firstCommunionMass} onChange={e=>set('firstCommunionMass',e.target.value)} /></div>
             </div>
             <div className="form-group"><label>Celebrant Priest</label><PriestSelect value={f.celebrantPriest} onChange={e=>set('celebrantPriest',e.target.value)} customValue={f.customPriest} onCustomChange={e=>set('customPriest',e.target.value)} /></div>
-            <label className="check-label"><input type="checkbox" checked={f.certificateIssued} onChange={e=>set('certificateIssued',e.target.checked)} style={{width:'auto'}} /> Certificate Issued</label>
+
+            {isEdit && (
+              <div style={{background:'var(--primary-pale)',border:'1px solid var(--primary-light)',borderRadius:'var(--radius)',padding:'10px 14px',marginBottom:'12px'}}>
+                <SL>📜 Certificate Status</SL>
+                <label className="check-label"><input type="checkbox" checked={f.certificateIssued} onChange={e=>set('certificateIssued',e.target.checked)} style={{width:'auto'}} /> Certificate Issued</label>
+              </div>
+            )}
+
             <MassScheduleFields scheduleMass={f.scheduleMass} onChange={set} massDate={f.massDate} massTime={f.massTime} massLocation={f.massLocation} customLocation={f.customMassLocation} onCustomLocation={e=>set('customMassLocation',e.target.value)} />
             <div className="form-group"><label>Register Number</label><input value={f.registerNumber} onChange={e=>set('registerNumber',e.target.value)} /></div>
             <div className="form-group"><label>Notes</label><textarea rows={2} value={f.notes} onChange={e=>set('notes',e.target.value)} /></div>
@@ -715,14 +751,17 @@ function FirstCommunionPage() {
 // CONFIRMATION
 // ══════════════════════════════════════════════════════════════════════════════
 const emptyConf = {
-  id:null, candidateName:'', candidateBirthDate:'', candidateGender:'', candidateAge:'',
-  baptismDate:'', baptismChurch:LOCATIONS[0], firstCommunionDate:'', firstCommunionChurch:LOCATIONS[0],
-  fatherName:'', motherName:'', guardianName:'', parentsAddress:'', parentsPhone:'', parentsEmail:'',
+  id:null, candidateName:'', candidateBirthDate:'', candidateGender:'',
+  baptismDate:'', baptismChurch:LOCATIONS[0],
+  firstCommunionDate:'', firstCommunionChurch:LOCATIONS[0],
+  fatherName:'', motherName:'', guardianName:'', parentsAddress:'', parentsPhone:'',
   confirmationName:'', confirmationDate:'', confirmationMass:'',
   celebrantBishop:'', customBishop:'',
   sponsorName:'', sponsorGender:'male', sponsorReligion:'Catholic', sponsorPhone:'',
   catechismClass:'', catechismTeacher:'', classesCompleted:false, retreatAttended:false, serviceHours:'',
-  sponsorLetterSubmitted:false, notes:'', registerNumber:'', certificateIssued:false, status:'registered',
+  sponsorLetterSubmitted:false, sponsorLetterFile:'',
+  baptismCertFile:'',
+  notes:'', registerNumber:'', certificateIssued:false, status:'registered',
   scheduleMass:false, massDate:'', massTime:'', massLocation:LOCATIONS[0], customMassLocation:''
 };
 
@@ -730,24 +769,23 @@ function ConfirmationPage() {
   const { confirmations, addConfirmation, archiveConfirmation, addEvent } = useApp();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [search, setSearch] = useState('');
-  const [errors, setErrors] = useState({});
   const [show, setShow] = useState(false);
   const [viewRec, setViewRec] = useState(null);
   const [certRec, setCertRec] = useState(null);
   const [f, setF] = useState(emptyConf);
-  const set = (k,v) => { setF(p=>({...p,[k]:v})); setErrors(p=>({...p,[k]:''})); };
+  const set = (k,v) => setF(p=>({...p,[k]:v}));
+  const isEdit = !!f.id;
 
-  const records = confirmations.filter(r=>!r.archived && (
+  const records = (confirmations||[]).filter(r=>!r.archived && (
     !search || r.candidateName?.toLowerCase().includes(search.toLowerCase()) ||
-    r.confirmationName?.toLowerCase().includes(search.toLowerCase()) ||
     r.registerNumber?.toLowerCase().includes(search.toLowerCase())
   ));
 
-  const openAdd = () => { setF({...emptyConf, registerNumber:genReg('CN',confirmations.filter(r=>!r.archived),'confirmationDate')}); setShow(true); };
+  const openAdd = () => { setF({...emptyConf, registerNumber:genReg('CN',(confirmations||[]).filter(r=>!r.archived),'confirmationDate')}); setShow(true); };
   const openEdit = (r) => { setF({...emptyConf,...r,customBishop:'',customMassLocation:''}); setShow(true); };
 
   const handleSubmit = () => {
-    if(!f.candidateName||!f.confirmationDate){ setErrors({candidateName:!f.candidateName?'Required':'',confirmationDate:!f.confirmationDate?'Required':''}); return; }
+    if(!f.candidateName||!f.confirmationDate){ alert('Fill required fields.'); return; }
     const bishop = f.celebrantBishop==='manual' ? f.customBishop : f.celebrantBishop;
     const record = {...f, celebrantBishop:bishop, id:f.id||Date.now(), archived:false};
     addConfirmation(record);
@@ -770,10 +808,10 @@ function ConfirmationPage() {
       <SearchBar value={search} onChange={setSearch} />
       <div className="card" style={{overflowX:'auto',marginTop:'12px'}}>
         <table>
-          <thead><tr><th>Register No.</th><th>Candidate</th><th>Confirmation Name</th><th>Date</th><th>Bishop/Priest</th><th>Sponsor</th><th>Certificate</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Register No.</th><th>Candidate</th><th>Conf. Name</th><th>Date</th><th>Bishop/Priest</th><th>Certificate</th><th>Actions</th></tr></thead>
           <tbody>
             {records.length===0
-              ? <tr><td colSpan={8} className="empty-td">No confirmation records yet. Click "Register New" to add one.</td></tr>
+              ? <tr><td colSpan={7} className="empty-td">No confirmation records yet.</td></tr>
               : records.map(r=>(
                 <tr key={r.id} className="clickable-row" onClick={()=>setViewRec(r)}>
                   <td><strong>{r.registerNumber||'Pending'}</strong></td>
@@ -781,7 +819,6 @@ function ConfirmationPage() {
                   <td>{r.confirmationName||'—'}</td>
                   <td>{r.confirmationDate}</td>
                   <td>{r.celebrantBishop||'—'}</td>
-                  <td>{r.sponsorName||'—'}</td>
                   <td><span className={`badge ${r.certificateIssued?'badge-active':'badge-pending'}`}>{r.certificateIssued?'Issued':'Pending'}</span></td>
                   <td><RecordActions onView={()=>setViewRec(r)} onEdit={()=>openEdit(r)} onPrint={()=>setCertRec(r)} onArchive={()=>doArchive(r)} /></td>
                 </tr>
@@ -793,24 +830,18 @@ function ConfirmationPage() {
       {viewRec && (
         <ViewModal color="linear-gradient(135deg,#7c4dab,#9b59b6)" icon="🕊️" title={viewRec.candidateName} subtitle={`Confirmation Record · ${viewRec.registerNumber||'No Register No.'}`} onClose={()=>setViewRec(null)}>
           <div className="rec-detail-grid">
-            <D label="Register No." value={viewRec.registerNumber} />
             <D label="Candidate" value={viewRec.candidateName} />
             <D label="Confirmation Name" value={viewRec.confirmationName} />
             <D label="Date" value={viewRec.confirmationDate} />
             <D label="Bishop/Priest" value={viewRec.celebrantBishop} />
-            <D label="Sponsor" value={`${viewRec.sponsorName} (${viewRec.sponsorGender==='male'?'Male':'Female'})`} />
-            <D label="Baptism Date" value={viewRec.baptismDate} />
-            <D label="1st Communion Date" value={viewRec.firstCommunionDate} />
-            <D label="Father" value={viewRec.fatherName} />
-            <D label="Mother" value={viewRec.motherName} />
-            <D label="Guardian" value={viewRec.guardianName} />
+            <D label="Sponsor" value={viewRec.sponsorName} />
             <D label="Classes Completed" value={viewRec.classesCompleted?'✅ Yes':'❌ No'} />
             <D label="Retreat Attended" value={viewRec.retreatAttended?'✅ Yes':'❌ No'} />
-            <D label="Service Hours" value={viewRec.serviceHours} />
             <D label="Sponsor Letter" value={viewRec.sponsorLetterSubmitted?'✅ Submitted':'❌ Pending'} />
             <D label="Certificate" value={viewRec.certificateIssued?'✅ Issued':'Pending'} />
-            <D label="Mass Scheduled" value={viewRec.scheduleMass?`✅ ${viewRec.massDate}`:'❌ No'} />
           </div>
+          <ViewFile label="Baptismal Certificate" value={viewRec.baptismCertFile} />
+          <ViewFile label="Sponsor Letter" value={viewRec.sponsorLetterFile} />
           <div style={{display:'flex',gap:'10px',marginTop:'16px',flexWrap:'wrap'}}>
             <button className="btn-primary" onClick={()=>{setViewRec(null);setCertRec(viewRec);}}>📜 View Certificate</button>
             <button className="btn-secondary" onClick={()=>{setViewRec(null);openEdit(viewRec);}}>✏️ Edit</button>
@@ -830,12 +861,9 @@ function ConfirmationPage() {
             <table className="cert-table"><tbody>
               <tr><td className="cl">Name</td><td className="cv">{certRec.candidateName}</td></tr>
               <tr><td className="cl">Confirmation Name</td><td className="cv">{certRec.confirmationName||'N/A'}</td></tr>
-              <tr><td className="cl">Date of Birth</td><td className="cv">{certRec.candidateBirthDate}</td></tr>
-              <tr><td className="cl">Father</td><td className="cv">{certRec.fatherName||'N/A'}</td></tr>
-              <tr><td className="cl">Mother</td><td className="cv">{certRec.motherName||'N/A'}</td></tr>
               <tr><td className="cl">Sponsor</td><td className="cv">{certRec.sponsorName||'N/A'}</td></tr>
             </tbody></table>
-            <p className="cert-main">received the Sacrament of Confirmation<br/>on the <strong>{ordinalDate(certRec.confirmationDate)}</strong><br/>at the Metropolitan Cathedral of the Immaculate Conception, Zamboanga City.</p>
+            <p className="cert-main">received the Sacrament of Confirmation<br/>on the <strong>{ordinalDate(certRec.confirmationDate)}</strong>.</p>
             <div className="cert-footer">
               <div className="cert-sig"><div className="cert-sig-line"/><div>Celebrant Bishop<br/><strong>{certRec.celebrantBishop||'To be assigned'}</strong></div></div>
               <div className="cert-reg">Register No.: <strong>{certRec.registerNumber||'Pending'}</strong><br/>Issued: {new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
@@ -848,26 +876,22 @@ function ConfirmationPage() {
         <div className="modal-overlay" onClick={()=>setShow(false)}>
           <div className="modal rec-form-modal" onClick={e=>e.stopPropagation()}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
-              <h2>{f.id?'✏️ Edit Record':'🕊️ Register Confirmation'}</h2>
+              <h2>{isEdit?'✏️ Edit Record':'🕊️ Register Confirmation'}</h2>
               <button className="close-panel" onClick={()=>setShow(false)}>✕</button>
             </div>
-            {!f.id && <div className="register-badge"><span>📋 Auto Register Number:</span><strong>{f.registerNumber}</strong></div>}
+            {!isEdit && <div className="register-badge"><span>📋 Auto Register Number:</span><strong>{f.registerNumber}</strong></div>}
+
             <SL>🧑 Candidate Information</SL>
-            <ParishionerSelect label="Auto-fill Candidate from Parish Directory" onSelect={p => {
-              set('candidateName', `${p.firstName} ${p.lastName}`);
-              set('candidateBirthDate', p.birthdate || '');
-              set('candidateGender', p.sex || '');
-              set('fatherName', p.fatherName || '');
-              set('motherName', p.motherName || '');
-            }} />
+            <ParishionerSelect label="Auto-fill Candidate from Parish Directory" onSelect={p => { set('candidateName',`${p.firstName} ${p.lastName}`); set('candidateBirthDate',p.birthdate||''); set('candidateGender',p.sex||''); set('fatherName',p.fatherName||''); set('motherName',p.motherName||''); }} />
             <div className="form-row">
-              <div className="form-group"><label>Full Name *</label><input value={f.candidateName} onChange={e=>set('candidateName',e.target.value)} placeholder="Candidate's full name" /></div>
+              <div className="form-group"><label>Full Name *</label><input value={f.candidateName} onChange={e=>set('candidateName',e.target.value)} /></div>
               <div className="form-group"><label>Confirmation Name</label><input value={f.confirmationName} onChange={e=>set('confirmationName',e.target.value)} placeholder="e.g., Santo Tomas" /></div>
             </div>
             <div className="form-row">
               <div className="form-group"><label>Birth Date</label><input type="date" value={f.candidateBirthDate} onChange={e=>set('candidateBirthDate',e.target.value)} /></div>
               <div className="form-group"><label>Gender</label><select value={f.candidateGender} onChange={e=>set('candidateGender',e.target.value)}><option value="">Select</option><option>Male</option><option>Female</option></select></div>
             </div>
+
             <SL>👨‍👩‍👦 Parents / Guardian</SL>
             <div className="form-row">
               <div className="form-group"><label>Father</label><input value={f.fatherName} onChange={e=>set('fatherName',e.target.value)} /></div>
@@ -877,6 +901,7 @@ function ConfirmationPage() {
               <div className="form-group"><label>Guardian (if applicable)</label><input value={f.guardianName} onChange={e=>set('guardianName',e.target.value)} /></div>
               <div className="form-group"><label>Phone</label><input value={f.parentsPhone} onChange={e=>set('parentsPhone',e.target.value)} /></div>
             </div>
+
             <SL>💧 Sacramental History</SL>
             <div className="form-row">
               <div className="form-group"><label>Baptism Date</label><input type="date" value={f.baptismDate} onChange={e=>set('baptismDate',e.target.value)} /></div>
@@ -886,16 +911,23 @@ function ConfirmationPage() {
               <div className="form-group"><label>1st Communion Date</label><input type="date" value={f.firstCommunionDate} onChange={e=>set('firstCommunionDate',e.target.value)} /></div>
               <div className="form-group"><label>1st Communion Church</label><select value={f.firstCommunionChurch} onChange={e=>set('firstCommunionChurch',e.target.value)}>{LOCATIONS.map(l=><option key={l}>{l}</option>)}</select></div>
             </div>
+
+            <SL>📄 Documents Submitted</SL>
+            <div style={{marginBottom:'10px'}}>
+              <label style={{fontSize:'0.88rem',fontWeight:'700',color:'var(--text-mid)'}}>Baptismal Certificate</label>
+              <FileUpload label="Baptismal Certificate" value={f.baptismCertFile} onChange={v=>set('baptismCertFile',v)} />
+            </div>
+
             <SL>🤝 Sponsor (Ninong/Ninang)</SL>
             <div className="form-row">
               <div className="form-group"><label>Sponsor Name</label><input value={f.sponsorName} onChange={e=>set('sponsorName',e.target.value)} /></div>
               <div className="form-group"><label>Role</label><select value={f.sponsorGender} onChange={e=>set('sponsorGender',e.target.value)}><option value="male">Male (Ninong)</option><option value="female">Female (Ninang)</option></select></div>
             </div>
-            <div className="form-row">
-              <div className="form-group"><label>Religion</label><select value={f.sponsorReligion} onChange={e=>set('sponsorReligion',e.target.value)}>{RELIGIONS.map(r=><option key={r}>{r}</option>)}</select></div>
-              <div className="form-group"><label>Sponsor Phone</label><input value={f.sponsorPhone} onChange={e=>set('sponsorPhone',e.target.value)} /></div>
+            <div style={{marginBottom:'10px'}}>
+              <label className="check-label"><input type="checkbox" checked={f.sponsorLetterSubmitted} onChange={e=>set('sponsorLetterSubmitted',e.target.checked)} style={{width:'auto'}} /> Sponsor Letter Submitted</label>
+              {f.sponsorLetterSubmitted && <FileUpload label="Sponsor Letter" value={f.sponsorLetterFile} onChange={v=>set('sponsorLetterFile',v)} />}
             </div>
-            <label className="check-label"><input type="checkbox" checked={f.sponsorLetterSubmitted} onChange={e=>set('sponsorLetterSubmitted',e.target.checked)} style={{width:'auto'}} /> Sponsor Letter Submitted</label>
+
             <SL>📚 Catechism Preparation</SL>
             <div className="form-row">
               <div className="form-group"><label>Class / Group</label><input value={f.catechismClass} onChange={e=>set('catechismClass',e.target.value)} /></div>
@@ -904,13 +936,21 @@ function ConfirmationPage() {
             <div className="form-group"><label>Service Hours Completed</label><input type="number" value={f.serviceHours} onChange={e=>set('serviceHours',e.target.value)} placeholder="e.g., 20" /></div>
             <label className="check-label"><input type="checkbox" checked={f.classesCompleted} onChange={e=>set('classesCompleted',e.target.checked)} style={{width:'auto'}} /> All Catechism Classes Completed</label>
             <label className="check-label"><input type="checkbox" checked={f.retreatAttended} onChange={e=>set('retreatAttended',e.target.checked)} style={{width:'auto'}} /> Retreat Attended</label>
+
             <SL>✝️ Confirmation Details</SL>
             <div className="form-row">
               <div className="form-group"><label>Confirmation Date *</label><input type="date" value={f.confirmationDate} onChange={e=>set('confirmationDate',e.target.value)} /></div>
               <div className="form-group"><label>Mass Type</label><input placeholder="e.g., Confirmation Mass" value={f.confirmationMass} onChange={e=>set('confirmationMass',e.target.value)} /></div>
             </div>
             <div className="form-group"><label>Celebrant Bishop / Priest</label><PriestSelect value={f.celebrantBishop} onChange={e=>set('celebrantBishop',e.target.value)} customValue={f.customBishop} onCustomChange={e=>set('customBishop',e.target.value)} /></div>
-            <label className="check-label"><input type="checkbox" checked={f.certificateIssued} onChange={e=>set('certificateIssued',e.target.checked)} style={{width:'auto'}} /> Certificate Issued</label>
+
+            {isEdit && (
+              <div style={{background:'var(--primary-pale)',border:'1px solid var(--primary-light)',borderRadius:'var(--radius)',padding:'10px 14px',marginBottom:'12px'}}>
+                <SL>📜 Certificate Status</SL>
+                <label className="check-label"><input type="checkbox" checked={f.certificateIssued} onChange={e=>set('certificateIssued',e.target.checked)} style={{width:'auto'}} /> Certificate Issued</label>
+              </div>
+            )}
+
             <MassScheduleFields scheduleMass={f.scheduleMass} onChange={set} massDate={f.massDate} massTime={f.massTime} massLocation={f.massLocation} customLocation={f.customMassLocation} onCustomLocation={e=>set('customMassLocation',e.target.value)} />
             <div className="form-group"><label>Register Number</label><input value={f.registerNumber} onChange={e=>set('registerNumber',e.target.value)} /></div>
             <div className="form-group"><label>Notes</label><textarea rows={2} value={f.notes} onChange={e=>set('notes',e.target.value)} /></div>
@@ -927,18 +967,20 @@ function ConfirmationPage() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// MARRIAGE  — with 3 Sundays (Banns) + Pre-Cana tracking
+// MARRIAGE — reordered + auto-banns + document uploads
 // ══════════════════════════════════════════════════════════════════════════════
 const emptyMarriage = {
   id:null,
   groomName:'', groomBirthDate:'', groomBaptismDate:'', groomBaptismChurch:'',
   groomFatherName:'', groomMotherName:'', groomConfirmed:true,
+  groomBaptismCertFile:'', groomConfirmationCertFile:'',
   brideName:'', brideBirthDate:'', brideBaptismDate:'', brideBaptismChurch:'',
   brideFatherName:'', brideMotherName:'', brideConfirmed:true,
-  weddingDate:'', weddingTime:'', weddingLocation:LOCATIONS[0], customLocation:'',
-  celebratingPriest:'', customPriest:'', includeMass:true,
+  brideBaptismCertFile:'', brideConfirmationCertFile:'',
+  marriageLicenseFile:'',
   preCanaCompleted:false, preCanaDate:'',
-  // 3 Sundays (Marriage Banns)
+  weddingDate:'', weddingTime:'', weddingLocation:LOCATIONS[0], customLocation:'',
+  celebratingPriest:'', customPriest:'',
   banns1Date:'', banns1Done:false,
   banns2Date:'', banns2Done:false,
   banns3Date:'', banns3Done:false,
@@ -952,27 +994,36 @@ function MarriagePage() {
   const { marriages, addMarriage, archiveMarriage, addEvent } = useApp();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [search, setSearch] = useState('');
-  const [errors, setErrors] = useState({});
   const [show, setShow] = useState(false);
   const [viewRec, setViewRec] = useState(null);
   const [certRec, setCertRec] = useState(null);
   const [f, setF] = useState(emptyMarriage);
-  const set = (k,v) => { setF(p=>({...p,[k]:v})); setErrors(p=>({...p,[k]:''})); };
+  const set = (k,v) => setF(p=>({...p,[k]:v}));
   const setW = (i,v) => { const w=[...f.witnesses]; w[i]=v; setF(p=>({...p,witnesses:w})); };
+  const isEdit = !!f.id;
 
-  const records = marriages.filter(r=>!r.archived && (
+  // Auto-calculate banns when wedding date changes
+  const handleWeddingDateChange = (date) => {
+    set('weddingDate', date);
+    if (date) {
+      const banns = calcBanns(date);
+      setF(p => ({ ...p, weddingDate: date, ...banns }));
+    }
+  };
+
+  const records = (marriages||[]).filter(r=>!r.archived && (
     !search || r.groomName?.toLowerCase().includes(search.toLowerCase()) ||
     r.brideName?.toLowerCase().includes(search.toLowerCase()) ||
     r.registerNumber?.toLowerCase().includes(search.toLowerCase())
   ));
 
-  const openAdd = () => { setF({...emptyMarriage, registerNumber:genReg('M',marriages.filter(r=>!r.archived),'weddingDate')}); setShow(true); };
+  const openAdd = () => { setF({...emptyMarriage, registerNumber:genReg('M',(marriages||[]).filter(r=>!r.archived),'weddingDate')}); setShow(true); };
   const openEdit = (r) => { setF({...emptyMarriage,...r,customPriest:'',customLocation:'',customMassLocation:''}); setShow(true); };
 
   const bannsAllDone = f.banns1Done && f.banns2Done && f.banns3Done;
 
   const handleSubmit = () => {
-    if(!f.groomName||!f.brideName||!f.weddingDate){ setErrors({groomName:!f.groomName?'Required':'',brideName:!f.brideName?'Required':'',weddingDate:!f.weddingDate?'Required':''}); return; }
+    if(!f.groomName||!f.brideName||!f.weddingDate){ alert('Fill required fields.'); return; }
     const priest = f.celebratingPriest==='manual' ? f.customPriest : f.celebratingPriest;
     const location = f.weddingLocation==='Other (please specify)' ? f.customLocation : f.weddingLocation;
     const record = {...f, celebratingPriest:priest, weddingLocation:location, id:f.id||Date.now(), archived:false};
@@ -996,22 +1047,17 @@ function MarriagePage() {
       <SearchBar value={search} onChange={setSearch} />
       <div className="card" style={{overflowX:'auto',marginTop:'12px'}}>
         <table>
-          <thead><tr><th>Register No.</th><th>Groom</th><th>Bride</th><th>Wedding Date</th><th>Priest</th><th>Banns</th><th>Pre-Cana</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Register No.</th><th>Groom</th><th>Bride</th><th>Wedding Date</th><th>Banns</th><th>Pre-Cana</th><th>Actions</th></tr></thead>
           <tbody>
             {records.length===0
-              ? <tr><td colSpan={8} className="empty-td">No marriage records yet. Click "Record New Marriage" to add one.</td></tr>
+              ? <tr><td colSpan={7} className="empty-td">No marriage records yet.</td></tr>
               : records.map(r=>(
                 <tr key={r.id} className="clickable-row" onClick={()=>setViewRec(r)}>
                   <td><strong>{r.registerNumber||'Pending'}</strong></td>
                   <td>{r.groomName}</td>
                   <td>{r.brideName}</td>
                   <td>{r.weddingDate}</td>
-                  <td>{r.celebratingPriest||'—'}</td>
-                  <td>
-                    <span className={`badge ${(r.banns1Done&&r.banns2Done&&r.banns3Done)?'badge-active':'badge-pending'}`}>
-                      {[r.banns1Done,r.banns2Done,r.banns3Done].filter(Boolean).length}/3 Done
-                    </span>
-                  </td>
+                  <td><span className={`badge ${(r.banns1Done&&r.banns2Done&&r.banns3Done)?'badge-active':'badge-pending'}`}>{[r.banns1Done,r.banns2Done,r.banns3Done].filter(Boolean).length}/3 Done</span></td>
                   <td><span className={`badge ${r.preCanaCompleted?'badge-active':'badge-pending'}`}>{r.preCanaCompleted?'✅ Done':'Pending'}</span></td>
                   <td><RecordActions onView={()=>setViewRec(r)} onEdit={()=>openEdit(r)} onPrint={()=>setCertRec(r)} onArchive={()=>doArchive(r)} /></td>
                 </tr>
@@ -1023,54 +1069,39 @@ function MarriagePage() {
       {viewRec && (
         <ViewModal color="linear-gradient(135deg,#c0392b,#e74c3c)" icon="💍" title={`${viewRec.groomName} & ${viewRec.brideName}`} subtitle={`Marriage Record · ${viewRec.registerNumber||'No Register No.'}`} onClose={()=>setViewRec(null)}>
           <div className="rec-detail-grid">
-            <D label="Register No." value={viewRec.registerNumber} />
             <D label="Wedding Date" value={viewRec.weddingDate} />
-            <D label="Time" value={viewRec.weddingTime} />
             <D label="Location" value={viewRec.weddingLocation} />
             <D label="Priest" value={viewRec.celebratingPriest} />
-            <D label="Nuptial Mass" value={viewRec.includeMass?'✅ Yes':'❌ No'} />
+            <D label="Pre-Cana" value={viewRec.preCanaCompleted?`✅ ${viewRec.preCanaDate}`:'❌ Pending'} />
+            <D label="Banns 1" value={`${viewRec.banns1Date||'—'} ${viewRec.banns1Done?'✅':'❌'}`} />
+            <D label="Banns 2" value={`${viewRec.banns2Date||'—'} ${viewRec.banns2Done?'✅':'❌'}`} />
+            <D label="Banns 3" value={`${viewRec.banns3Date||'—'} ${viewRec.banns3Done?'✅':'❌'}`} />
+            <D label="License No." value={viewRec.marriageLicenseNumber} />
+            <D label="Certificate" value={viewRec.certificateIssued?'✅ Issued':'Pending'} />
           </div>
           <div className="rec-couple-grid">
             <div className="rec-section">
               <h4>🤵 Groom</h4>
               <D label="Name" value={viewRec.groomName} />
-              <D label="Birth Date" value={viewRec.groomBirthDate} />
               <D label="Father" value={viewRec.groomFatherName} />
               <D label="Mother" value={viewRec.groomMotherName} />
-              <D label="Baptism" value={`${viewRec.groomBaptismDate} @ ${viewRec.groomBaptismChurch}`} />
               <D label="Confirmed" value={viewRec.groomConfirmed?'✅ Yes':'❌ No'} />
             </div>
             <div className="rec-section">
               <h4>👰 Bride</h4>
               <D label="Name" value={viewRec.brideName} />
-              <D label="Birth Date" value={viewRec.brideBirthDate} />
               <D label="Father" value={viewRec.brideFatherName} />
               <D label="Mother" value={viewRec.brideMotherName} />
-              <D label="Baptism" value={`${viewRec.brideBaptismDate} @ ${viewRec.brideBaptismChurch}`} />
               <D label="Confirmed" value={viewRec.brideConfirmed?'✅ Yes':'❌ No'} />
             </div>
           </div>
-          <div className="rec-section">
-            <h4>📣 Marriage Banns (3 Sundays)</h4>
-            <div className="rec-detail-grid">
-              <D label="1st Sunday" value={`${viewRec.banns1Date||'—'} ${viewRec.banns1Done?'✅':'❌'}`} />
-              <D label="2nd Sunday" value={`${viewRec.banns2Date||'—'} ${viewRec.banns2Done?'✅':'❌'}`} />
-              <D label="3rd Sunday" value={`${viewRec.banns3Date||'—'} ${viewRec.banns3Done?'✅':'❌'}`} />
-              <D label="Pre-Cana" value={viewRec.preCanaCompleted?`✅ Completed ${viewRec.preCanaDate}`:'❌ Pending'} />
-            </div>
-          </div>
-          <div className="rec-section">
-            <h4>👥 Wedding Party & Documents</h4>
-            <div className="rec-detail-grid">
-              <D label="Best Man" value={viewRec.bestMan} />
-              <D label="Maid of Honor" value={viewRec.maidOfHonor} />
-              <D label="Witness 1" value={viewRec.witnesses?.[0]} />
-              <D label="Witness 2" value={viewRec.witnesses?.[1]} />
-              <D label="License No." value={viewRec.marriageLicenseNumber} />
-              <D label="License Date" value={viewRec.marriageLicenseDate} />
-              <D label="Certificate" value={viewRec.certificateIssued?'✅ Issued':'Pending'} />
-              <D label="Mass Scheduled" value={viewRec.scheduleMass?`✅ ${viewRec.massDate}`:'❌ No'} />
-            </div>
+          {/* Uploaded documents */}
+          <div style={{marginTop:'12px'}}>
+            <ViewFile label="Groom's Baptismal Certificate" value={viewRec.groomBaptismCertFile} />
+            <ViewFile label="Groom's Confirmation Certificate" value={viewRec.groomConfirmationCertFile} />
+            <ViewFile label="Bride's Baptismal Certificate" value={viewRec.brideBaptismCertFile} />
+            <ViewFile label="Bride's Confirmation Certificate" value={viewRec.brideConfirmationCertFile} />
+            <ViewFile label="Marriage License" value={viewRec.marriageLicenseFile} />
           </div>
           <div style={{display:'flex',gap:'10px',marginTop:'16px',flexWrap:'wrap'}}>
             <button className="btn-primary" onClick={()=>{setViewRec(null);setCertRec(viewRec);}}>📜 View Certificate</button>
@@ -1093,7 +1124,7 @@ function MarriagePage() {
               <tr><td className="cl">Son of</td><td className="cv">{certRec.groomFatherName||'N/A'} & {certRec.groomMotherName||'N/A'}</td></tr>
               <tr><td className="cl">Bride</td><td className="cv">{certRec.brideName}</td></tr>
               <tr><td className="cl">Daughter of</td><td className="cv">{certRec.brideFatherName||'N/A'} & {certRec.brideMotherName||'N/A'}</td></tr>
-              <tr><td className="cl">Official Witnesses</td><td className="cv">{certRec.witnesses?.filter(Boolean).join(' & ')||'N/A'}</td></tr>
+              <tr><td className="cl">Witnesses</td><td className="cv">{certRec.witnesses?.filter(Boolean).join(' & ')||'N/A'}</td></tr>
               <tr><td className="cl">License No.</td><td className="cv">{certRec.marriageLicenseNumber||'N/A'}</td></tr>
             </tbody></table>
             <p className="cert-main">according to the rites of the Roman Catholic Church<br/>on the <strong>{ordinalDate(certRec.weddingDate)}</strong><br/>at <strong>{certRec.weddingLocation||'N/A'}</strong>.</p>
@@ -1109,109 +1140,140 @@ function MarriagePage() {
         <div className="modal-overlay" onClick={()=>setShow(false)}>
           <div className="modal rec-form-modal" onClick={e=>e.stopPropagation()}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
-              <h2>{f.id?'✏️ Edit Marriage Record':'💍 Record New Marriage'}</h2>
+              <h2>{isEdit?'✏️ Edit Marriage Record':'💍 Record New Marriage'}</h2>
               <button className="close-panel" onClick={()=>setShow(false)}>✕</button>
             </div>
-            {!f.id && <div className="register-badge"><span>📋 Auto Register Number:</span><strong>{f.registerNumber}</strong></div>}
+            {!isEdit && <div className="register-badge"><span>📋 Auto Register Number:</span><strong>{f.registerNumber}</strong></div>}
 
+            {/* SECTION 1: Groom */}
             <SL>🤵 Groom's Information</SL>
-            <ParishionerSelect label="Auto-fill Groom from Parish Directory" onSelect={p => {
-              set('groomName', `${p.firstName} ${p.lastName}`);
-              set('groomBirthDate', p.birthdate || '');
-              set('groomFatherName', p.fatherName || '');
-              set('groomMotherName', p.motherName || '');
-            }} />
+            <ParishionerSelect label="Auto-fill Groom from Parish Directory" onSelect={p => { set('groomName',`${p.firstName} ${p.lastName}`); set('groomBirthDate',p.birthdate||''); set('groomFatherName',p.fatherName||''); set('groomMotherName',p.motherName||''); }} />
             <div className="form-row">
               <div className="form-group"><label>Full Name *</label><input placeholder="Groom's full name" value={f.groomName} onChange={e=>set('groomName',e.target.value)} /></div>
               <div className="form-group"><label>Birth Date</label><input type="date" value={f.groomBirthDate} onChange={e=>set('groomBirthDate',e.target.value)} /></div>
             </div>
             <div className="form-row">
-              <div className="form-group"><label>Father's Name *</label><input value={f.groomFatherName} onChange={e=>set('groomFatherName',e.target.value)} /></div>
-              <div className="form-group"><label>Mother's Name *</label><input value={f.groomMotherName} onChange={e=>set('groomMotherName',e.target.value)} /></div>
+              <div className="form-group"><label>Father's Name</label><input value={f.groomFatherName} onChange={e=>set('groomFatherName',e.target.value)} /></div>
+              <div className="form-group"><label>Mother's Name</label><input value={f.groomMotherName} onChange={e=>set('groomMotherName',e.target.value)} /></div>
             </div>
             <div className="form-row">
               <div className="form-group"><label>Baptism Date</label><input type="date" value={f.groomBaptismDate} onChange={e=>set('groomBaptismDate',e.target.value)} /></div>
-              <div className="form-group"><label>Baptism Church</label><input placeholder="Church where baptized" value={f.groomBaptismChurch} onChange={e=>set('groomBaptismChurch',e.target.value)} /></div>
+              <div className="form-group"><label>Baptism Church</label><input value={f.groomBaptismChurch} onChange={e=>set('groomBaptismChurch',e.target.value)} /></div>
             </div>
             <label className="check-label"><input type="checkbox" checked={f.groomConfirmed} onChange={e=>set('groomConfirmed',e.target.checked)} style={{width:'auto'}} /> Groom has received Confirmation</label>
 
+            {/* SECTION 2: Bride */}
             <SL>👰 Bride's Information</SL>
-            <ParishionerSelect label="Auto-fill Bride from Parish Directory" onSelect={p => {
-              set('brideName', `${p.firstName} ${p.lastName}`);
-              set('brideBirthDate', p.birthdate || '');
-              set('brideFatherName', p.fatherName || '');
-              set('brideMotherName', p.motherName || '');
-            }} />
+            <ParishionerSelect label="Auto-fill Bride from Parish Directory" onSelect={p => { set('brideName',`${p.firstName} ${p.lastName}`); set('brideBirthDate',p.birthdate||''); set('brideFatherName',p.fatherName||''); set('brideMotherName',p.motherName||''); }} />
             <div className="form-row">
               <div className="form-group"><label>Full Name *</label><input placeholder="Bride's full name" value={f.brideName} onChange={e=>set('brideName',e.target.value)} /></div>
               <div className="form-group"><label>Birth Date</label><input type="date" value={f.brideBirthDate} onChange={e=>set('brideBirthDate',e.target.value)} /></div>
             </div>
             <div className="form-row">
-              <div className="form-group"><label>Father's Name *</label><input value={f.brideFatherName} onChange={e=>set('brideFatherName',e.target.value)} /></div>
-              <div className="form-group"><label>Mother's Name *</label><input value={f.brideMotherName} onChange={e=>set('brideMotherName',e.target.value)} /></div>
+              <div className="form-group"><label>Father's Name</label><input value={f.brideFatherName} onChange={e=>set('brideFatherName',e.target.value)} /></div>
+              <div className="form-group"><label>Mother's Name</label><input value={f.brideMotherName} onChange={e=>set('brideMotherName',e.target.value)} /></div>
             </div>
             <div className="form-row">
               <div className="form-group"><label>Baptism Date</label><input type="date" value={f.brideBaptismDate} onChange={e=>set('brideBaptismDate',e.target.value)} /></div>
-              <div className="form-group"><label>Baptism Church</label><input placeholder="Church where baptized" value={f.brideBaptismChurch} onChange={e=>set('brideBaptismChurch',e.target.value)} /></div>
+              <div className="form-group"><label>Baptism Church</label><input value={f.brideBaptismChurch} onChange={e=>set('brideBaptismChurch',e.target.value)} /></div>
             </div>
             <label className="check-label"><input type="checkbox" checked={f.brideConfirmed} onChange={e=>set('brideConfirmed',e.target.checked)} style={{width:'auto'}} /> Bride has received Confirmation</label>
 
-            <SL>✝️ Sacramental Preparation</SL>
+            {/* SECTION 3: Documents */}
+            <SL>📄 Documents Submitted</SL>
+            <p style={{fontSize:'0.82rem',color:'var(--text-light)',marginBottom:'10px'}}>Upload soft copies of the required documents.</p>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'8px'}}>
+              <div>
+                <label style={{fontSize:'0.85rem',fontWeight:'700',color:'var(--text-mid)'}}>Groom's Baptismal Cert.</label>
+                <FileUpload label="Groom Baptismal" value={f.groomBaptismCertFile} onChange={v=>set('groomBaptismCertFile',v)} />
+              </div>
+              <div>
+                <label style={{fontSize:'0.85rem',fontWeight:'700',color:'var(--text-mid)'}}>Groom's Confirmation Cert.</label>
+                <FileUpload label="Groom Confirmation" value={f.groomConfirmationCertFile} onChange={v=>set('groomConfirmationCertFile',v)} />
+              </div>
+              <div>
+                <label style={{fontSize:'0.85rem',fontWeight:'700',color:'var(--text-mid)'}}>Bride's Baptismal Cert.</label>
+                <FileUpload label="Bride Baptismal" value={f.brideBaptismCertFile} onChange={v=>set('brideBaptismCertFile',v)} />
+              </div>
+              <div>
+                <label style={{fontSize:'0.85rem',fontWeight:'700',color:'var(--text-mid)'}}>Bride's Confirmation Cert.</label>
+                <FileUpload label="Bride Confirmation" value={f.brideConfirmationCertFile} onChange={v=>set('brideConfirmationCertFile',v)} />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group"><label>Marriage License Number</label><input value={f.marriageLicenseNumber} onChange={e=>set('marriageLicenseNumber',e.target.value)} placeholder="License number from civil registry" /></div>
+              <div className="form-group"><label>License Issue Date</label><input type="date" value={f.marriageLicenseDate} onChange={e=>set('marriageLicenseDate',e.target.value)} /></div>
+            </div>
+            <FileUpload label="Marriage License" value={f.marriageLicenseFile} onChange={v=>set('marriageLicenseFile',v)} />
+
+            {/* SECTION 4: Pre-Cana */}
+            <SL>📚 Pre-Cana Marriage Preparation</SL>
+            <div style={{background:'var(--primary-pale)',border:'1px solid var(--primary-light)',borderRadius:'var(--radius)',padding:'10px 14px',marginBottom:'10px',fontSize:'0.85rem',color:'var(--primary)'}}>
+              ℹ️ Pre-Cana seminar must be completed <strong>before</strong> the Marriage Banns are announced.
+            </div>
+            <label className="check-label"><input type="checkbox" checked={f.preCanaCompleted} onChange={e=>set('preCanaCompleted',e.target.checked)} style={{width:'auto'}} /> Pre-Cana Marriage Preparation Completed</label>
+            {f.preCanaCompleted && <div className="form-group" style={{marginTop:'8px'}}><label>Pre-Cana Completion Date</label><input type="date" value={f.preCanaDate} onChange={e=>set('preCanaDate',e.target.value)} /></div>}
+
+            {/* SECTION 5: Wedding Details */}
+            <SL>💒 Wedding Details</SL>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Wedding Date * <span style={{fontSize:'0.78rem',color:'var(--primary)',fontWeight:'700'}}>(Banns auto-calculate from this)</span></label>
+                <input type="date" value={f.weddingDate} onChange={e=>handleWeddingDateChange(e.target.value)} />
+              </div>
+              <div className="form-group"><label>Wedding Time</label><input type="time" value={f.weddingTime} onChange={e=>set('weddingTime',e.target.value)} /></div>
+            </div>
+            <div className="form-group"><label>Wedding Location</label><LocationSelect value={f.weddingLocation} onChange={e=>set('weddingLocation',e.target.value)} customValue={f.customLocation} onCustomChange={e=>set('customLocation',e.target.value)} /></div>
+            <div className="form-group"><label>Celebrating Priest</label><PriestSelect value={f.celebratingPriest} onChange={e=>set('celebratingPriest',e.target.value)} customValue={f.customPriest} onCustomChange={e=>set('customPriest',e.target.value)} /></div>
+
+            {/* SECTION 6: Banns */}
+            <SL>📣 Marriage Banns (3 Consecutive Sundays)</SL>
             <div className="banns-box">
-              <p className="banns-intro">📣 <strong>Marriage Banns</strong> — Catholic Church requires the announcement of a marriage to the parish on 3 consecutive Sundays before the wedding, to allow anyone to raise valid objections.</p>
+              <p className="banns-intro">📣 <strong>Marriage Banns</strong> — The upcoming marriage must be announced to the parish on 3 consecutive Sundays before the wedding. Dates are auto-calculated from the wedding date.</p>
+              {!f.weddingDate && <p style={{color:'var(--warning)',fontSize:'0.85rem',fontWeight:'700'}}>⚠️ Please select a wedding date above to auto-calculate the Sunday dates.</p>}
               <div className="form-row">
-                <div className="form-group"><label>1st Sunday Date</label><input type="date" value={f.banns1Date} onChange={e=>set('banns1Date',e.target.value)} /></div>
+                <div className="form-group"><label>1st Sunday</label><input type="date" value={f.banns1Date} onChange={e=>set('banns1Date',e.target.value)} /></div>
                 <div className="form-group" style={{justifyContent:'flex-end',alignSelf:'flex-end',paddingBottom:'12px'}}>
                   <label className="check-label"><input type="checkbox" checked={f.banns1Done} onChange={e=>set('banns1Done',e.target.checked)} style={{width:'auto'}} /> Announced ✅</label>
                 </div>
               </div>
               <div className="form-row">
-                <div className="form-group"><label>2nd Sunday Date</label><input type="date" value={f.banns2Date} onChange={e=>set('banns2Date',e.target.value)} /></div>
+                <div className="form-group"><label>2nd Sunday</label><input type="date" value={f.banns2Date} onChange={e=>set('banns2Date',e.target.value)} /></div>
                 <div className="form-group" style={{justifyContent:'flex-end',alignSelf:'flex-end',paddingBottom:'12px'}}>
                   <label className="check-label"><input type="checkbox" checked={f.banns2Done} onChange={e=>set('banns2Done',e.target.checked)} style={{width:'auto'}} /> Announced ✅</label>
                 </div>
               </div>
               <div className="form-row">
-                <div className="form-group"><label>3rd Sunday Date</label><input type="date" value={f.banns3Date} onChange={e=>set('banns3Date',e.target.value)} /></div>
+                <div className="form-group"><label>3rd Sunday</label><input type="date" value={f.banns3Date} onChange={e=>set('banns3Date',e.target.value)} /></div>
                 <div className="form-group" style={{justifyContent:'flex-end',alignSelf:'flex-end',paddingBottom:'12px'}}>
                   <label className="check-label"><input type="checkbox" checked={f.banns3Done} onChange={e=>set('banns3Done',e.target.checked)} style={{width:'auto'}} /> Announced ✅</label>
                 </div>
               </div>
               {bannsAllDone && <div className="banns-done">✅ All 3 Sundays announced! The couple may proceed with the wedding.</div>}
             </div>
-            <label className="check-label"><input type="checkbox" checked={f.preCanaCompleted} onChange={e=>set('preCanaCompleted',e.target.checked)} style={{width:'auto'}} /> Pre-Cana Marriage Preparation Completed</label>
-            {f.preCanaCompleted && <div className="form-group" style={{marginTop:'8px'}}><label>Pre-Cana Completion Date</label><input type="date" value={f.preCanaDate} onChange={e=>set('preCanaDate',e.target.value)} /></div>}
 
-            <SL>💒 Wedding Details</SL>
-            <div className="form-row">
-              <div className="form-group"><label>Wedding Date *</label><input type="date" value={f.weddingDate} onChange={e=>set('weddingDate',e.target.value)} /></div>
-              <div className="form-group"><label>Wedding Time</label><input type="time" value={f.weddingTime} onChange={e=>set('weddingTime',e.target.value)} /></div>
-            </div>
-            <div className="form-group"><label>Wedding Location *</label><LocationSelect value={f.weddingLocation} onChange={e=>set('weddingLocation',e.target.value)} customValue={f.customLocation} onCustomChange={e=>set('customLocation',e.target.value)} /></div>
-            <div className="form-group"><label>Celebrating Priest *</label><PriestSelect value={f.celebratingPriest} onChange={e=>set('celebratingPriest',e.target.value)} customValue={f.customPriest} onCustomChange={e=>set('customPriest',e.target.value)} /></div>
-            <label className="check-label"><input type="checkbox" checked={f.includeMass} onChange={e=>set('includeMass',e.target.checked)} style={{width:'auto'}} /> Included Nuptial Mass</label>
-
+            {/* SECTION 7: Wedding Party */}
             <SL>👥 Witnesses & Wedding Party</SL>
             <div className="form-row">
-              <div className="form-group"><label>Best Man</label><input value={f.bestMan} onChange={e=>set('bestMan',e.target.value)} placeholder="Best man's name" /></div>
-              <div className="form-group"><label>Maid of Honor</label><input value={f.maidOfHonor} onChange={e=>set('maidOfHonor',e.target.value)} placeholder="Maid of honor's name" /></div>
+              <div className="form-group"><label>Best Man</label><input value={f.bestMan} onChange={e=>set('bestMan',e.target.value)} /></div>
+              <div className="form-group"><label>Maid of Honor</label><input value={f.maidOfHonor} onChange={e=>set('maidOfHonor',e.target.value)} /></div>
             </div>
             <div className="form-row">
-              <div className="form-group"><label>Official Witness 1 *</label><input value={f.witnesses[0]} onChange={e=>setW(0,e.target.value)} placeholder="First witness name" /></div>
-              <div className="form-group"><label>Official Witness 2 *</label><input value={f.witnesses[1]} onChange={e=>setW(1,e.target.value)} placeholder="Second witness name" /></div>
+              <div className="form-group"><label>Official Witness 1</label><input value={f.witnesses[0]} onChange={e=>setW(0,e.target.value)} /></div>
+              <div className="form-group"><label>Official Witness 2</label><input value={f.witnesses[1]} onChange={e=>setW(1,e.target.value)} /></div>
             </div>
 
-            <SL>📋 Civil Documents</SL>
-            <div className="form-row">
-              <div className="form-group"><label>Marriage License Number</label><input value={f.marriageLicenseNumber} onChange={e=>set('marriageLicenseNumber',e.target.value)} placeholder="License number from civil registry" /></div>
-              <div className="form-group"><label>License Issue Date</label><input type="date" value={f.marriageLicenseDate} onChange={e=>set('marriageLicenseDate',e.target.value)} /></div>
-            </div>
-            <label className="check-label"><input type="checkbox" checked={f.certificateIssued} onChange={e=>set('certificateIssued',e.target.checked)} style={{width:'auto'}} /> Marriage Certificate Issued</label>
+            {/* Certificate Issued — edit only */}
+            {isEdit && (
+              <div style={{background:'var(--primary-pale)',border:'1px solid var(--primary-light)',borderRadius:'var(--radius)',padding:'10px 14px',marginBottom:'12px'}}>
+                <SL>📜 Certificate Status</SL>
+                <label className="check-label"><input type="checkbox" checked={f.certificateIssued} onChange={e=>set('certificateIssued',e.target.checked)} style={{width:'auto'}} /> Marriage Certificate Issued</label>
+              </div>
+            )}
 
             <MassScheduleFields scheduleMass={f.scheduleMass} onChange={set} massDate={f.massDate} massTime={f.massTime} massLocation={f.massLocation} customLocation={f.customMassLocation} onCustomLocation={e=>set('customMassLocation',e.target.value)} />
-
             <div className="form-group"><label>Register Number</label><input value={f.registerNumber} onChange={e=>set('registerNumber',e.target.value)} /></div>
-            <div className="form-group"><label>Notes</label><textarea rows={3} value={f.notes} onChange={e=>set('notes',e.target.value)} placeholder="Any additional notes about this marriage..." /></div>
+            <div className="form-group"><label>Notes</label><textarea rows={3} value={f.notes} onChange={e=>set('notes',e.target.value)} /></div>
             <div style={{display:'flex',gap:'12px',marginTop:'12px'}}>
               <button className="btn-primary" style={{flex:1}} onClick={handleSubmit}>💾 Save Record</button>
               <button className="btn-secondary" onClick={()=>setShow(false)}>Cancel</button>
@@ -1236,6 +1298,7 @@ const emptyFuneral = {
   burialDate:'', burialLocation:'', burialType:'Cemetery',
   vigil:false, vigilDate:'', vigilTime:'', vigilLocation:'',
   requestedBy:'', relationship:'', contactNumber:'',
+  deathCertFile:'',
   notes:'', registerNumber:'', certificateIssued:false,
   scheduleMass:false, massDate:'', massTime:'', massLocation:LOCATIONS[0], customMassLocation:''
 };
@@ -1244,24 +1307,23 @@ function FuneralPage() {
   const { funerals, addFuneral, archiveFuneral, addEvent } = useApp();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [search, setSearch] = useState('');
-  const [errors, setErrors] = useState({});
   const [show, setShow] = useState(false);
   const [viewRec, setViewRec] = useState(null);
   const [certRec, setCertRec] = useState(null);
   const [f, setF] = useState(emptyFuneral);
-  const set = (k,v) => { setF(p=>({...p,[k]:v})); setErrors(p=>({...p,[k]:''})); };
+  const set = (k,v) => setF(p=>({...p,[k]:v}));
+  const isEdit = !!f.id;
 
-  const records = funerals.filter(r=>!r.archived && (
+  const records = (funerals||[]).filter(r=>!r.archived && (
     !search || r.deceasedName?.toLowerCase().includes(search.toLowerCase()) ||
-    r.requestedBy?.toLowerCase().includes(search.toLowerCase()) ||
     r.registerNumber?.toLowerCase().includes(search.toLowerCase())
   ));
 
-  const openAdd = () => { setF({...emptyFuneral, registerNumber:genReg('FR',funerals.filter(r=>!r.archived),'funeralMassDate')}); setShow(true); };
+  const openAdd = () => { setF({...emptyFuneral, registerNumber:genReg('FR',(funerals||[]).filter(r=>!r.archived),'funeralMassDate')}); setShow(true); };
   const openEdit = (r) => { setF({...emptyFuneral,...r,customPriest:'',customLocation:'',customMassLocation:''}); setShow(true); };
 
   const handleSubmit = () => {
-    if(!f.deceasedName||!f.funeralMassDate){ setErrors({deceasedName:!f.deceasedName?'Required':'',funeralMassDate:!f.funeralMassDate?'Required':''}); return; }
+    if(!f.deceasedName||!f.funeralMassDate){ alert('Fill required fields.'); return; }
     const priest = f.celebratingPriest==='manual' ? f.customPriest : f.celebratingPriest;
     const location = f.funeralLocation==='Other (please specify)' ? f.customLocation : f.funeralLocation;
     const record = {...f, celebratingPriest:priest, funeralLocation:location, id:f.id||Date.now(), archived:false};
@@ -1285,17 +1347,16 @@ function FuneralPage() {
       <SearchBar value={search} onChange={setSearch} />
       <div className="card" style={{overflowX:'auto',marginTop:'12px'}}>
         <table>
-          <thead><tr><th>Register No.</th><th>Deceased</th><th>Date of Death</th><th>Funeral Mass</th><th>Burial Location</th><th>Priest</th><th>Record</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Register No.</th><th>Deceased</th><th>Date of Death</th><th>Funeral Mass</th><th>Priest</th><th>Record</th><th>Actions</th></tr></thead>
           <tbody>
             {records.length===0
-              ? <tr><td colSpan={8} className="empty-td">No funeral records yet. Click "Add Funeral Record" to add one.</td></tr>
+              ? <tr><td colSpan={7} className="empty-td">No funeral records yet.</td></tr>
               : records.map(r=>(
                 <tr key={r.id} className="clickable-row" onClick={()=>setViewRec(r)}>
                   <td><strong>{r.registerNumber||'Pending'}</strong></td>
                   <td>{r.deceasedName}</td>
                   <td>{r.dateOfDeath||'—'}</td>
                   <td>{r.funeralMassDate}</td>
-                  <td>{r.burialLocation||'—'}</td>
                   <td>{r.celebratingPriest||'—'}</td>
                   <td><span className={`badge ${r.certificateIssued?'badge-active':'badge-pending'}`}>{r.certificateIssued?'Issued':'Pending'}</span></td>
                   <td><RecordActions onView={()=>setViewRec(r)} onEdit={()=>openEdit(r)} onPrint={()=>setCertRec(r)} onArchive={()=>doArchive(r)} /></td>
@@ -1308,27 +1369,17 @@ function FuneralPage() {
       {viewRec && (
         <ViewModal color="linear-gradient(135deg,#555e6e,#7f8c8d)" icon="🕯️" title={viewRec.deceasedName} subtitle={`Funeral Record · ${viewRec.registerNumber||'No Register No.'}`} onClose={()=>setViewRec(null)}>
           <div className="rec-detail-grid">
-            <D label="Register No." value={viewRec.registerNumber} />
             <D label="Deceased" value={viewRec.deceasedName} />
             <D label="Age" value={viewRec.deceasedAge} />
-            <D label="Gender" value={viewRec.deceasedGender} />
-            <D label="Religion" value={viewRec.religion} />
             <D label="Date of Death" value={viewRec.dateOfDeath} />
-            <D label="Place of Death" value={viewRec.placeOfDeath} />
-            <D label="Cause of Death" value={viewRec.causeOfDeath} />
-            <D label="Funeral Mass Date" value={viewRec.funeralMassDate} />
-            <D label="Funeral Time" value={viewRec.funeralMassTime} />
-            <D label="Mass Location" value={viewRec.funeralLocation} />
+            <D label="Funeral Mass" value={viewRec.funeralMassDate} />
+            <D label="Location" value={viewRec.funeralLocation} />
             <D label="Priest" value={viewRec.celebratingPriest} />
-            <D label="Vigil" value={viewRec.vigil?`✅ ${viewRec.vigilDate} ${viewRec.vigilTime} @ ${viewRec.vigilLocation}`:'❌ No'} />
-            <D label="Burial Date" value={viewRec.burialDate} />
             <D label="Burial Location" value={viewRec.burialLocation} />
-            <D label="Burial Type" value={viewRec.burialType} />
             <D label="Requested By" value={`${viewRec.requestedBy} (${viewRec.relationship})`} />
-            <D label="Contact" value={viewRec.contactNumber} />
             <D label="Record Issued" value={viewRec.certificateIssued?'✅ Yes':'Pending'} />
-            <D label="Mass Scheduled" value={viewRec.scheduleMass?`✅ ${viewRec.massDate}`:'❌ No'} />
           </div>
+          <ViewFile label="Death Certificate" value={viewRec.deathCertFile} />
           <div style={{display:'flex',gap:'10px',marginTop:'16px',flexWrap:'wrap'}}>
             <button className="btn-primary" onClick={()=>{setViewRec(null);setCertRec(viewRec);}}>📜 View Record</button>
             <button className="btn-secondary" onClick={()=>{setViewRec(null);openEdit(viewRec);}}>✏️ Edit</button>
@@ -1349,7 +1400,6 @@ function FuneralPage() {
               <tr><td className="cl">Deceased Name</td><td className="cv">{certRec.deceasedName}</td></tr>
               <tr><td className="cl">Age</td><td className="cv">{certRec.deceasedAge||'N/A'}</td></tr>
               <tr><td className="cl">Date of Death</td><td className="cv">{certRec.dateOfDeath||'N/A'}</td></tr>
-              <tr><td className="cl">Place of Death</td><td className="cv">{certRec.placeOfDeath||'N/A'}</td></tr>
               <tr><td className="cl">Burial Location</td><td className="cv">{certRec.burialLocation||'N/A'}</td></tr>
               <tr><td className="cl">Requested By</td><td className="cv">{certRec.requestedBy||'N/A'} ({certRec.relationship||'Family'})</td></tr>
             </tbody></table>
@@ -1366,18 +1416,13 @@ function FuneralPage() {
         <div className="modal-overlay" onClick={()=>setShow(false)}>
           <div className="modal rec-form-modal" onClick={e=>e.stopPropagation()}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
-              <h2>{f.id?'✏️ Edit Record':'🕯️ Add Funeral Record'}</h2>
+              <h2>{isEdit?'✏️ Edit Record':'🕯️ Add Funeral Record'}</h2>
               <button className="close-panel" onClick={()=>setShow(false)}>✕</button>
             </div>
-            {!f.id && <div className="register-badge"><span>📋 Auto Register Number:</span><strong>{f.registerNumber}</strong></div>}
+            {!isEdit && <div className="register-badge"><span>📋 Auto Register Number:</span><strong>{f.registerNumber}</strong></div>}
 
             <SL>🧑 Deceased Information</SL>
-            <ParishionerSelect label="Auto-fill Deceased from Parish Directory" onSelect={p => {
-              set('deceasedName', `${p.firstName} ${p.lastName}`);
-              set('deceasedAge', p.birthdate ? String(new Date().getFullYear() - new Date(p.birthdate).getFullYear()) : '');
-              set('deceasedGender', p.sex || '');
-              set('deceasedReligion', 'Catholic');
-            }} />
+            <ParishionerSelect label="Auto-fill Deceased from Parish Directory" onSelect={p => { set('deceasedName',`${p.firstName} ${p.lastName}`); set('deceasedAge',p.birthdate?String(new Date().getFullYear()-new Date(p.birthdate).getFullYear()):''); set('deceasedGender',p.sex||''); }} />
             <div className="form-row">
               <div className="form-group"><label>Full Name *</label><input placeholder="Deceased's full name" value={f.deceasedName} onChange={e=>set('deceasedName',e.target.value)} /></div>
               <div className="form-group"><label>Age</label><input type="number" value={f.deceasedAge} onChange={e=>set('deceasedAge',e.target.value)} /></div>
@@ -1388,9 +1433,15 @@ function FuneralPage() {
             </div>
             <div className="form-row">
               <div className="form-group"><label>Date of Death</label><input type="date" value={f.dateOfDeath} onChange={e=>set('dateOfDeath',e.target.value)} /></div>
-              <div className="form-group"><label>Place of Death</label><input placeholder="e.g., Zamboanga City Medical Center" value={f.placeOfDeath} onChange={e=>set('placeOfDeath',e.target.value)} /></div>
+              <div className="form-group"><label>Place of Death</label><input value={f.placeOfDeath} onChange={e=>set('placeOfDeath',e.target.value)} /></div>
             </div>
-            <div className="form-group"><label>Cause of Death</label><input placeholder="e.g., Natural causes, Illness" value={f.causeOfDeath} onChange={e=>set('causeOfDeath',e.target.value)} /></div>
+            <div className="form-group"><label>Cause of Death</label><input value={f.causeOfDeath} onChange={e=>set('causeOfDeath',e.target.value)} /></div>
+
+            <SL>📄 Documents Submitted</SL>
+            <div style={{marginBottom:'10px'}}>
+              <label style={{fontSize:'0.88rem',fontWeight:'700',color:'var(--text-mid)'}}>Death Certificate</label>
+              <FileUpload label="Death Certificate" value={f.deathCertFile} onChange={v=>set('deathCertFile',v)} />
+            </div>
 
             <SL>⛪ Funeral Mass</SL>
             <div className="form-row">
@@ -1415,7 +1466,7 @@ function FuneralPage() {
               <div className="form-group"><label>Burial Date</label><input type="date" value={f.burialDate} onChange={e=>set('burialDate',e.target.value)} /></div>
               <div className="form-group"><label>Burial Type</label><select value={f.burialType} onChange={e=>set('burialType',e.target.value)}>{BURIAL_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
             </div>
-            <div className="form-group"><label>Burial Location / Cemetery</label><input placeholder="e.g., Sta. Cruz Cemetery" value={f.burialLocation} onChange={e=>set('burialLocation',e.target.value)} /></div>
+            <div className="form-group"><label>Burial Location / Cemetery</label><input value={f.burialLocation} onChange={e=>set('burialLocation',e.target.value)} /></div>
 
             <SL>👤 Requested By (Family Representative)</SL>
             <div className="form-row">
@@ -1424,10 +1475,14 @@ function FuneralPage() {
             </div>
             <div className="form-group"><label>Contact Number</label><input value={f.contactNumber} onChange={e=>set('contactNumber',e.target.value)} /></div>
 
-            <label className="check-label"><input type="checkbox" checked={f.certificateIssued} onChange={e=>set('certificateIssued',e.target.checked)} style={{width:'auto'}} /> Record / Certificate Issued</label>
+            {isEdit && (
+              <div style={{background:'var(--primary-pale)',border:'1px solid var(--primary-light)',borderRadius:'var(--radius)',padding:'10px 14px',marginBottom:'12px'}}>
+                <SL>📜 Certificate Status</SL>
+                <label className="check-label"><input type="checkbox" checked={f.certificateIssued} onChange={e=>set('certificateIssued',e.target.checked)} style={{width:'auto'}} /> Record / Certificate Issued</label>
+              </div>
+            )}
 
             <MassScheduleFields scheduleMass={f.scheduleMass} onChange={set} massDate={f.massDate} massTime={f.massTime} massLocation={f.massLocation} customLocation={f.customMassLocation} onCustomLocation={e=>set('customMassLocation',e.target.value)} />
-
             <div className="form-group"><label>Register Number</label><input value={f.registerNumber} onChange={e=>set('registerNumber',e.target.value)} /></div>
             <div className="form-group"><label>Notes</label><textarea rows={2} value={f.notes} onChange={e=>set('notes',e.target.value)} /></div>
             <div style={{display:'flex',gap:'12px',marginTop:'12px'}}>
@@ -1448,8 +1503,8 @@ function FuneralPage() {
 function ReportsPage() {
   const { baptisms, marriages, funerals, confirmations, firstCommunions } = useApp();
   const now = new Date();
-  const thisMonth = (arr, key) => arr.filter(r=>{ const d=new Date(r[key]); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); });
-  const active = (arr) => arr.filter(r=>!r.archived);
+  const thisMonth = (arr, key) => (arr||[]).filter(r=>{ const d=new Date(r[key]); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); });
+  const active = (arr) => (arr||[]).filter(r=>!r.archived);
 
   const monthData = [
     { label:'Baptisms', icon:'💧', count:thisMonth(baptisms,'baptismDate').length },
@@ -1466,62 +1521,34 @@ function ReportsPage() {
     { label:'Funeral Records', icon:'🕯️', count:active(funerals).length },
   ];
 
-  const handlePrint = () => window.print();
-
   return (
     <div id="reports-printable">
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'24px',flexWrap:'wrap',gap:'10px'}}>
         <h2 style={{margin:0}}>📊 Sacramental Reports</h2>
-        <button className="btn-primary" style={{fontSize:'0.88rem'}} onClick={handlePrint}>🖨️ Print / Export Report</button>
+        <button className="btn-primary" style={{fontSize:'0.88rem'}} onClick={()=>window.print()}>🖨️ Print / Export Report</button>
       </div>
       <div className="report-church-name">Metropolitan Cathedral of the Immaculate Conception · Zamboanga City, Philippines</div>
       <div className="report-date-line">Generated: {now.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
 
       <h3 style={{margin:'20px 0 12px',color:'var(--primary)'}}>📅 {now.toLocaleDateString('en-US',{month:'long',year:'numeric'})} — This Month</h3>
       <div className="reports-grid">
-        {monthData.map(d=>(
-          <div key={d.label} className="card">
-            <h4>{d.icon} {d.label}</h4>
-            <div className="report-count">{d.count}</div>
-          </div>
-        ))}
+        {monthData.map(d=>(<div key={d.label} className="card"><h4>{d.icon} {d.label}</h4><div className="report-count">{d.count}</div></div>))}
       </div>
 
       <h3 style={{margin:'28px 0 12px',color:'var(--primary)'}}>📈 All Time Totals</h3>
       <div className="reports-grid">
-        {totalData.map(d=>(
-          <div key={d.label} className="card">
-            <h4>{d.icon} Total {d.label}</h4>
-            <div className="report-count">{d.count}</div>
-          </div>
-        ))}
+        {totalData.map(d=>(<div key={d.label} className="card"><h4>{d.icon} Total {d.label}</h4><div className="report-count">{d.count}</div></div>))}
       </div>
 
       <div className="report-summary-table">
         <h3>📋 Summary Table</h3>
         <table>
           <thead><tr><th>Sacrament</th><th>This Month</th><th>All Time</th></tr></thead>
-          <tbody>
-            {monthData.map((m,i)=>(
-              <tr key={m.label}>
-                <td>{m.icon} {m.label}</td>
-                <td style={{textAlign:'center',fontWeight:'bold'}}>{m.count}</td>
-                <td style={{textAlign:'center',fontWeight:'bold',color:'var(--primary)'}}>{totalData[i].count}</td>
-              </tr>
-            ))}
-          </tbody>
+          <tbody>{monthData.map((m,i)=>(<tr key={m.label}><td>{m.icon} {m.label}</td><td style={{textAlign:'center',fontWeight:'bold'}}>{m.count}</td><td style={{textAlign:'center',fontWeight:'bold',color:'var(--primary)'}}>{totalData[i].count}</td></tr>))}</tbody>
         </table>
       </div>
 
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          #reports-printable, #reports-printable * { visibility: visible; }
-          #reports-printable { position: absolute; left: 0; top: 0; width: 100%; }
-          button { display: none !important; }
-          .records-subnav { display: none !important; }
-        }
-      `}</style>
+      <style>{`@media print { body * { visibility: hidden; } #reports-printable, #reports-printable * { visibility: visible; } #reports-printable { position: absolute; left: 0; top: 0; width: 100%; } button { display: none !important; } .records-subnav { display: none !important; } }`}</style>
     </div>
   );
 }

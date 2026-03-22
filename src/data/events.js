@@ -8,72 +8,19 @@ export const EVENT_TYPES = [
   { id: 'renovation', label: 'Renovation', icon: '🔧', color: '#e67e22' },
   { id: 'novena', label: 'Novena', icon: '📿', color: '#d4ac0d' },
   { id: 'fiesta', label: 'Fiesta Mass', icon: '🎊', color: '#e74c3c' },
+  { id: 'communion', label: 'First Communion', icon: '🍞', color: '#c47d1e' },
+  { id: 'confirmation', label: 'Confirmation', icon: '🕊️', color: '#7c4dab' },
+  { id: 'meeting', label: 'Meeting', icon: '👥', color: '#27ae60' },
+  { id: 'catechism', label: 'Catechism', icon: '📖', color: '#16a085' },
+  { id: 'other', label: 'Other', icon: '📌', color: '#7f8c8d' },
   { id: 'others', label: 'Others', icon: '📌', color: '#7f8c8d' },
 ];
 
-export const getEventType = (id) => EVENT_TYPES.find(e => e.id === id) || EVENT_TYPES[EVENT_TYPES.length - 1];
+export const getEventType = (id) =>
+  EVENT_TYPES.find(e => e.id === id) || { id: 'other', label: 'Other', icon: '📌', color: '#7f8c8d' };
 
-const today = new Date();
-const y = today.getFullYear();
-const m = today.getMonth();
-
-export const initialEvents = [
-  {
-    id: 1,
-    date: `${y}-${String(m + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`,
-    type: 'sunday_mass',
-    title: 'Sunday Mass',
-    time: '8:00 AM',
-    location: 'Metropolitan Cathedral of the Immaculate Conception',
-    priest: 'Fr. Santos',
-    notes: 'Regular Sunday Mass for all parishioners.',
-    status: 'approved',
-  },
-  {
-    id: 2,
-    date: `${y}-${String(m + 1).padStart(2, '0')}-${String(today.getDate() + 1).padStart(2, '0')}`,
-    type: 'choir',
-    title: 'Choir Practice',
-    time: '4:00 PM',
-    location: 'Metropolitan Cathedral of the Immaculate Conception',
-    priest: '',
-    notes: 'Weekly choir practice for Sunday Mass.',
-    status: 'approved',
-  },
-  {
-    id: 3,
-    date: `${y}-${String(m + 1).padStart(2, '0')}-${String(today.getDate() + 2).padStart(2, '0')}`,
-    type: 'baptism',
-    title: 'Baptism Ceremony',
-    time: '10:00 AM',
-    location: 'Archdiocesan Shrine of Our Lady of the Pillar (Fort Pilar), Zamboanga City',
-    priest: 'Fr. Reyes',
-    notes: 'Baptism of 3 infants.',
-    status: 'approved',
-  },
-  {
-    id: 4,
-    date: `${y}-${String(m + 1).padStart(2, '0')}-${String(today.getDate() + 4).padStart(2, '0')}`,
-    type: 'wedding',
-    title: 'Nuptial Mass',
-    time: '2:00 PM',
-    location: 'Metropolitan Cathedral of the Immaculate Conception',
-    priest: 'Fr. Santos',
-    notes: 'Wedding of Juan Dela Cruz and Maria Santos.',
-    status: 'approved',
-  },
-  {
-    id: 5,
-    date: `${y}-${String(m + 1).padStart(2, '0')}-${String(today.getDate() + 5).padStart(2, '0')}`,
-    type: 'novena',
-    title: 'Novena Mass',
-    time: '6:00 PM',
-    location: 'Metropolitan Cathedral of the Immaculate Conception',
-    priest: 'Fr. Reyes',
-    notes: '9-day devotion in preparation for the parish feast.',
-    status: 'approved',
-  },
-];
+// No initial events — each church starts fresh from Supabase
+export const initialEvents = [];
 
 export const MASS_CATEGORIES = [
   {
@@ -110,4 +57,20 @@ export const MASS_CATEGORIES = [
   },
 ];
 
-export const BASE_LOCATIONS = ['Metropolitan Cathedral of the Immaculate Conception, Zamboanga City', 'Archdiocesan Shrine of Our Lady of the Pillar (Fort Pilar), Zamboanga City'];
+// Removed hardcoded church locations — clerks now type their own location
+// "Other (please specify)" is kept for custom entries
+export const BASE_LOCATIONS = ['Main Chapel', 'Side Chapel', 'Parish Hall', 'Baptistry', 'Function Room', 'Church Grounds', 'Other (please specify)'];
+
+export const getEventType2 = (category) => {
+  const map = {
+    'Regular / Scheduled Masses': 'sunday_mass',
+    'Devotional / Votive Masses': 'novena',
+    'Sacramental Masses': 'baptism',
+    'Funeral / Memorial Masses': 'funeral',
+    'Feast Day / Liturgical Calendar Masses': 'fiesta',
+    'Marian and Filipino Devotional': 'novena',
+    'Liturgical Style': 'sunday_mass',
+    'Others': 'other',
+  };
+  return map[category] || 'other';
+};

@@ -10,30 +10,43 @@ const defaultSlot = { day: 'Sunday', time: '', type: 'Regular Mass', priest: '',
 export default function MassSchedule() {
   const { massSchedules, addMassSchedule, deleteMassSchedule, priests } = useApp();
 
-  const [cfm, setCfm] = useState({ open:false, msg:'', label:'', color:'', action:null });
-  const askConfirm = (msg, label, color, action) => setCfm({ open:true, msg, label, color, action });
-  const doCfm = () => { cfm.action && cfm.action(); setCfm(s=>({...s,open:false})); };
-  const cancelCfm = () => setCfm(s=>({...s,open:false}));
+  const [cfm, setCfm] = useState({ open: false, msg: '', label: '', color: '', action: null });
+  const askConfirm = (msg, label, color, action) => setCfm({ open: true, msg, label, color, action });
+  const doCfm = () => { cfm.action && cfm.action(); setCfm(s => ({ ...s, open: false })); };
+  const cancelCfm = () => setCfm(s => ({ ...s, open: false }));
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(defaultSlot);
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
   const set = (k, v) => { setForm(p => ({ ...p, [k]: v })); setErrors(p => ({ ...p, [k]: '' })); };
 
   const activePriests = (priests || []).filter(p => !p.archived && p.status === 'Active');
   const schedules = massSchedules || [];
 
   const byDay = DAYS.reduce((acc, d) => {
-    acc[d] = schedules.filter(s => s.day === d).sort((a, b) => a.time.localeCompare(b.time));
+    acc[d] = schedules.filter(s => s.day === d).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
     return acc;
   }, {});
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const e = {};
     if (!form.time) e.time = 'Time is required.';
     if (!form.location) e.location = 'Location is required.';
     if (Object.keys(e).length) { setErrors(e); return; }
-    addMassSchedule({ ...form, id: Date.now() });
-    setForm(defaultSlot); setShowForm(false);
+    setSaving(true);
+    await addMassSchedule({ ...form });
+    setSaving(false);
+    setForm(defaultSlot);
+    setShowForm(false);
+  };
+
+  const fmtTime = (t) => {
+    if (!t) return '';
+    const [h, m] = t.split(':');
+    const hour = parseInt(h);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${m} ${ampm}`;
   };
 
   return (
@@ -58,7 +71,7 @@ export default function MassSchedule() {
               <div className="massched-day-header">{day}</div>
               {byDay[day].map(s => (
                 <div key={s.id} className="massched-slot">
-                  <div className="massched-time">{s.time}</div>
+                  <div className="massched-time">{fmtTime(s.time)}</div>
                   <div className="massched-info">
                     <strong>{s.type}</strong>
                     {s.priest && <span>✝️ {s.priest}</span>}
@@ -66,7 +79,7 @@ export default function MassSchedule() {
                     {s.language && <span>🌐 {s.language}</span>}
                     {s.notes && <span className="massched-notes">{s.notes}</span>}
                   </div>
-                  <button className="massched-del" onClick={()=>askConfirm('Remove this mass schedule?','🗑️ Yes, Remove','var(--danger)',()=>deleteMassSchedule(s.id))}>✕</button>
+                  <button className="massched-del" onClick={() => askConfirm('Remove this mass schedule?', '🗑️ Yes, Remove', 'var(--danger)', () => deleteMassSchedule(s.id))}>✕</button>
                 </div>
               ))}
             </div>
@@ -105,7 +118,11 @@ export default function MassSchedule() {
                 <div className="form-group">
                   <label>Language</label>
                   <select value={form.language} onChange={e => set('language', e.target.value)}>
-                    <option>Filipino</option><option>English</option><option>Cebuano</option><option>Spanish</option><option>Latin</option>
+                    <option>Filipino</option>
+                    <option>English</option>
+                    <option>Cebuano</option>
+                    <option>Spanish</option>
+                    <option>Latin</option>
                   </select>
                 </div>
               </div>
@@ -126,7 +143,9 @@ export default function MassSchedule() {
                 <input placeholder="e.g., With choir, For youth, etc." value={form.notes} onChange={e => set('notes', e.target.value)} />
               </div>
               <div style={{ display: 'flex', gap: '10px' }}>
-                <button className="btn-primary" style={{ flex: 1 }} onClick={handleSave}>Save Schedule</button>
+                <button className="btn-primary" style={{ flex: 1 }} onClick={handleSave} disabled={saving}>
+                  {saving ? '⏳ Saving...' : 'Save Schedule'}
+                </button>
                 <button className="btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
               </div>
             </div>

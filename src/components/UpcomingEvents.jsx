@@ -4,15 +4,6 @@ import { getEventType } from '../data/events';
 import EventModal from './EventModal';
 import './UpcomingEvents.css';
 
-function getThisWeekRange() {
-  const now = new Date();
-  const start = new Date(now);
-  start.setHours(0,0,0,0);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 7);
-  return { start, end };
-}
-
 function dateToObj(str) {
   const [y, m, d] = str.split('-').map(Number);
   return new Date(y, m - 1, d);
@@ -21,20 +12,21 @@ function dateToObj(str) {
 const PAGE_SIZE = 5;
 
 export default function UpcomingEvents({ isClerk = false }) {
-  const { events } = useApp();
+  // Clerk uses events, client uses clientEvents
+  const { events, clientEvents } = useApp();
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [allPage, setAllPage] = useState(1);
 
   const today = new Date();
   today.setHours(0,0,0,0);
-  const { end: weekEnd } = getThisWeekRange();
 
-  const activeEvents = events.filter(e => !e.archived);
+  // Use correct event source based on role
+  const sourceEvents = isClerk ? (events || []) : (clientEvents || []);
+  const activeEvents = sourceEvents.filter(e => !e.archived && !e.done);
   const sorted = [...activeEvents].sort((a, b) => dateToObj(a.date) - dateToObj(b.date));
-
-  const upcoming = sorted.filter(e => dateToObj(e.date) >= today);
-  const thisWeek = upcoming.filter(e => dateToObj(e.date) < weekEnd);
-  const allUpcoming = upcoming;
+  const allUpcoming = sorted.filter(e => {
+    try { return dateToObj(e.date) >= today; } catch { return false; }
+  });
 
   const paginate = (arr, page) => arr.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const totalPages = (arr) => Math.max(1, Math.ceil(arr.length / PAGE_SIZE));
@@ -46,7 +38,7 @@ export default function UpcomingEvents({ isClerk = false }) {
         <div className="uc-icon" style={{ background: type.color }}>{type.icon}</div>
         <div className="uc-info">
           <div className="uc-title">{ev.title}</div>
-          <div className="uc-meta">📅 {ev.date} &nbsp;·&nbsp; 🕐 {ev.time}</div>
+          <div className="uc-meta">📅 {ev.date} &nbsp;·&nbsp; 🕐 {ev.time || 'All day'}</div>
           <div className="uc-meta">📍 {ev.location}</div>
         </div>
         <span className="uc-arrow">›</span>
@@ -66,7 +58,6 @@ export default function UpcomingEvents({ isClerk = false }) {
 
   return (
     <div className="upcoming-events-wrapper">
-      {/* All Upcoming */}
       <section className="upcoming-section">
         <div className="upcoming-section-header">
           <h3>🗓️ All Upcoming Events</h3>

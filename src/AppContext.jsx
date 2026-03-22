@@ -1,328 +1,1128 @@
-import { createContext, useContext, useState } from 'react';
-import { initialEvents } from './data/events';
-import { initialMembers, initialPriests } from './data/members';
-import { initialParishioners, initialBaptisms, initialConfirmations, initialFirstCommunions, initialMarriages, initialFunerals } from './data/records';
-import { initialTransactions } from './data/finance';
+import { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from './lib/supabase';
+import { sendRequestNotification } from './lib/email';
 
 const AppContext = createContext(null);
 
-const mkLog = (action, category, detail) => ({
-  id: Date.now() + Math.random(),
-  timestamp: new Date().toISOString(),
-  action, category, detail,
-});
-
 export function AppProvider({ children }) {
-  const [isClerk, setIsClerk] = useState(false);
-  const [events, setEvents] = useState(initialEvents);
-  const [members, setMembers] = useState(initialMembers);
-  const [priests, setPriests] = useState(initialPriests);
-  const [parishioners, setParishioners] = useState(initialParishioners);
-  const [baptisms, setBaptisms] = useState(initialBaptisms);
-  const [confirmations, setConfirmations] = useState(initialConfirmations);
-  const [firstCommunions, setFirstCommunions] = useState(initialFirstCommunions);
-  const [marriages, setMarriages] = useState(initialMarriages);
-  const [funerals, setFunerals] = useState(initialFunerals);
-  const [transactions, setTransactions] = useState(initialTransactions);
+  const [role, setRole] = useState(null);
+  const [currentChurch, setCurrentChurch] = useState(null);
+  const [currentClerk, setCurrentClerk] = useState(null);
+  const [selectedChurch, setSelectedChurch] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  // Separate client-side state so it never overwrites clerk data
+  const [clientEvents, setClientEvents] = useState([]);
+  const [clientBulletins, setClientBulletins] = useState([]);
+  const [clientMassSchedules, setClientMassSchedules] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [priests, setPriests] = useState([]);
+  const [parishioners, setParishioners] = useState([]);
+  const [baptisms, setBaptisms] = useState([]);
+  const [confirmations, setConfirmations] = useState([]);
+  const [firstCommunions, setFirstCommunions] = useState([]);
+  const [marriages, setMarriages] = useState([]);
+  const [funerals, setFunerals] = useState([]);
+  const [transactions, setTransactions] = useState([]);
   const [eventRequests, setEventRequests] = useState([]);
   const [recordRequests, setRecordRequests] = useState([]);
   const [membershipRequests, setMembershipRequests] = useState([]);
+  const [bulletins, setBulletins] = useState([]);
+  const [massSchedules, setMassSchedules] = useState([]);
   const [activityLog, setActivityLog] = useState([]);
   const [clerkAccounts, setClerkAccounts] = useState([]);
-  const addClerkAccount = (acc) => setClerkAccounts(prev => [...prev, { ...acc, active: false }]);
-  const activateClerkAccount = (id) => { setClerkAccounts(prev => prev.map(a => a.id === id ? { ...a, active: true } : a)); };
-  const deleteClerkAccount = (id) => setClerkAccounts(prev => prev.filter(a => a.id !== id));
-  const [bulletins, setBulletins] = useState([]);
-  const addBulletin = (b) => { setBulletins(prev => [b, ...prev]); addLog('Added', 'Bulletin', `"${b.title}"`); };
-  const updateBulletin = (id, data) => { setBulletins(prev => prev.map(x => x.id === id ? { ...x, ...data } : x)); addLog('Edited', 'Bulletin', `"${data.title}"`); };
-  const deleteBulletin = (id) => setBulletins(prev => prev.filter(x => x.id !== id));
-  const togglePinBulletin = (id) => setBulletins(prev => prev.map(x => x.id === id ? { ...x, pinned: !x.pinned } : x));
-  const [massSchedules, setMassSchedules] = useState([]);
-  const addMassSchedule = (s) => { setMassSchedules(prev => [...prev, s]); addLog('Added', 'Mass Schedule', `${s.day} ${s.time} — ${s.type}`); };
-  const deleteMassSchedule = (id) => setMassSchedules(prev => prev.filter(x => x.id !== id));
+  const [churches, setChurches] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const addLog = (action, category, detail) =>
-    setActivityLog(prev => [mkLog(action, category, detail), ...prev].slice(0, 200));
+  // ── Restore session ───────────────────────────────────────────────────────
+  useEffect(() => {
+    const restoreSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const email = session.user.email;
+        const superAdminEmail = import.meta.env.VITE_SUPER_ADMIN_EMAIL;
+        if (email === superAdminEmail) {
+          setRole('superadmin');
+        } else {
+          const { data: clerk } = await supabase
+            .from('clerk_accounts')
+            .select('*, churches(*)')
+            .eq('email', email)
+            .single();
+          if (clerk && clerk.active) {
+            setRole('clerk');
+            setCurrentClerk(clerk);
+            setCurrentChurch(clerk.churches);
+          }
+        }
+      }
+      setAuthLoading(false);
+    };
+    restoreSession();
+  }, []);
 
-  // ── Events ────────────────────────────────────────────────────────────────
-  const addEvent = (ev) => {
-    const record = { ...ev, id: Date.now(), status: 'approved', archived: false, done: false };
-    setEvents(prev => [...prev, record]);
-    addLog('Added', 'Event', `"${ev.title}" scheduled on ${ev.date}`);
+  useEffect(() => {
+    if (role === 'clerk' && currentChurch) loadAllData(currentChurch.id);
+    if (role === 'superadmin') loadChurches();
+  }, [role, currentChurch]);
+
+  useEffect(() => {
+    if (selectedChurch) loadClientData(selectedChurch.id);
+  }, [selectedChurch]);
+
+  const loadAllData = async (cid) => {
+    setLoading(true);
+    await Promise.all([
+      loadEvents(cid), loadMembers(cid), loadPriests(cid),
+      loadParishioners(cid), loadBaptisms(cid), loadConfirmations(cid),
+      loadFirstCommunions(cid), loadMarriages(cid), loadFunerals(cid),
+      loadTransactions(cid), loadEventRequests(cid), loadRecordRequests(cid),
+      loadMembershipRequests(cid), loadBulletins(cid), loadMassSchedules(cid),
+      loadActivityLog(cid), loadClerkAccounts(cid),
+    ]);
+    setLoading(false);
   };
-  const updateEvent = (id, data) => setEvents(prev => prev.map(e => e.id === id ? { ...e, ...data } : e));
-  const archiveEvent = (id) => {
+
+  const loadClientData = async (cid) => {
+    // Load into SEPARATE client state — never touches clerk's events/bulletins/massSchedules
+    const [evData, blData, msData] = await Promise.all([
+      supabase.from('events').select('*').eq('church_id', cid).eq('status', 'approved').eq('archived', false).eq('done', false).order('date'),
+      supabase.from('bulletins').select('*').eq('church_id', cid).order('created_at', { ascending: false }),
+      supabase.from('mass_schedules').select('*').eq('church_id', cid),
+    ]);
+    if (evData.data) setClientEvents(evData.data.map(r => ({
+      id: r.id, title: r.title, date: r.date, time: r.time,
+      type: r.type, location: r.location, priest: r.priest,
+      status: r.status, done: r.done, archived: r.archived,
+    })));
+    if (blData.data) setClientBulletins(blData.data.map(r => ({
+      id: r.id, title: r.title, category: r.category,
+      content: r.content, author: r.author, pinned: r.pinned, createdAt: r.created_at,
+    })));
+    if (msData.data) setClientMassSchedules(msData.data.map(r => ({
+      id: r.id, day: r.day, time: r.time, type: r.type,
+      priest: r.priest, location: r.location, language: r.language, notes: r.notes,
+    })));
+  };
+
+  const loadChurches = async () => {
+    const { data } = await supabase.from('churches').select('*').order('created_at', { ascending: false });
+    if (data) setChurches(data);
+  };
+
+  // ── Loaders ───────────────────────────────────────────────────────────────
+  const loadEvents = async (cid) => {
+    const { data } = await supabase.from('events').select('*').eq('church_id', cid).order('date', { ascending: false });
+    if (data) setEvents(data.map(r => ({
+      id: r.id, churchId: r.church_id, title: r.title, date: r.date, time: r.time,
+      type: r.type, location: r.location, priest: r.priest, language: r.language,
+      notes: r.notes, status: r.status, done: r.done, archived: r.archived, archivedAt: r.archived_at,
+    })));
+  };
+
+  const loadMembers = async (cid) => {
+    const { data } = await supabase.from('members').select('*').eq('church_id', cid);
+    if (data) setMembers(data.map(r => ({
+      id: r.id, churchId: r.church_id,
+      lastName: r.last_name, firstName: r.first_name, middleName: r.middle_name,
+      gender: r.gender, birthday: r.birthday, address: r.address,
+      contact: r.contact, email: r.email, ministry: r.ministry,
+      role: r.role, status: r.status,
+      skills: r.skills || [], availability: r.availability || [],
+      joined: r.joined, baptized: r.baptized, confirmed: r.confirmed,
+      firstCommunion: r.first_communion, photo: r.photo,
+      archived: r.archived, archivedAt: r.archived_at,
+    })));
+  };
+
+  const loadPriests = async (cid) => {
+    const { data } = await supabase.from('priests').select('*').eq('church_id', cid);
+    if (data) setPriests(data.map(r => ({
+      id: r.id, churchId: r.church_id,
+      title: r.title, lastName: r.last_name, firstName: r.first_name,
+      middleName: r.middle_name, suffix: r.suffix, birthday: r.birthday,
+      address: r.address, contact: r.contact, email: r.email,
+      specialization: r.specialization, assignedParish: r.assigned_parish,
+      status: r.status, ordainedDate: r.ordained_date, notes: r.notes,
+      archived: r.archived, archivedAt: r.archived_at,
+    })));
+  };
+
+  const loadParishioners = async (cid) => {
+    const { data } = await supabase.from('parishioners').select('*').eq('church_id', cid);
+    if (data) setParishioners(data.map(r => ({
+      id: r.id, churchId: r.church_id,
+      lastName: r.last_name, firstName: r.first_name, middleName: r.middle_name,
+      suffix: r.suffix, birthdate: r.birthdate, birthplace: r.birthplace,
+      sex: r.sex, fatherName: r.father_name, motherName: r.mother_name,
+      address: r.address, city: r.city, province: r.province,
+      contact: r.contact, email: r.email,
+      archived: r.archived, archivedAt: r.archived_at,
+    })));
+  };
+
+  const loadBaptisms = async (cid) => {
+    const { data } = await supabase.from('baptisms').select('*').eq('church_id', cid);
+    if (data) setBaptisms(data.map(r => ({
+      id: r.id, churchId: r.church_id, registerNumber: r.register_number,
+      childName: r.child_name, childBirthDate: r.child_birth_date,
+      childBirthPlace: r.child_birth_place, childGender: r.child_gender,
+      fatherName: r.father_name, fatherReligion: r.father_religion,
+      motherName: r.mother_name, motherReligion: r.mother_religion,
+      parentsAddress: r.parents_address, parentsPhone: r.parents_phone,
+      parentsMarriedInChurch: r.parents_married_in_church,
+      godparents: r.godparents || [],
+      baptismDate: r.baptism_date, baptismTime: r.baptism_time,
+      location: r.location, priest: r.priest,
+      birthCertificateSubmitted: r.birth_certificate_submitted,
+      marriageCertificateSubmitted: r.marriage_certificate_submitted,
+      birthCertFile: r.birth_cert_file, marriageCertFile: r.marriage_cert_file,
+      certificateIssued: r.certificate_issued,
+      scheduleMass: r.schedule_mass, massDate: r.mass_date,
+      massTime: r.mass_time, massLocation: r.mass_location,
+      notes: r.notes, status: r.status,
+      archived: r.archived, archivedAt: r.archived_at,
+    })));
+  };
+
+  const loadConfirmations = async (cid) => {
+    const { data } = await supabase.from('confirmations').select('*').eq('church_id', cid);
+    if (data) setConfirmations(data.map(r => ({
+      id: r.id, churchId: r.church_id, registerNumber: r.register_number,
+      candidateName: r.candidate_name, candidateBirthDate: r.candidate_birth_date,
+      candidateGender: r.candidate_gender, candidateAge: r.candidate_age,
+      baptismDate: r.baptism_date, baptismChurch: r.baptism_church,
+      firstCommunionDate: r.first_communion_date, firstCommunionChurch: r.first_communion_church,
+      fatherName: r.father_name, motherName: r.mother_name, guardianName: r.guardian_name,
+      parentsAddress: r.parents_address, parentsPhone: r.parents_phone, parentsEmail: r.parents_email,
+      confirmationName: r.confirmation_name, confirmationDate: r.confirmation_date,
+      confirmationMass: r.confirmation_mass, celebrantBishop: r.celebrant_bishop,
+      sponsorName: r.sponsor_name, sponsorGender: r.sponsor_gender,
+      sponsorReligion: r.sponsor_religion, sponsorPhone: r.sponsor_phone,
+      catechismClass: r.catechism_class, catechismTeacher: r.catechism_teacher,
+      classesCompleted: r.classes_completed, retreatAttended: r.retreat_attended,
+      serviceHours: r.service_hours,
+      sponsorLetterSubmitted: r.sponsor_letter_submitted, sponsorLetterFile: r.sponsor_letter_file,
+      baptismCertFile: r.baptism_cert_file,
+      certificateIssued: r.certificate_issued,
+      scheduleMass: r.schedule_mass, massDate: r.mass_date,
+      massTime: r.mass_time, massLocation: r.mass_location,
+      notes: r.notes, status: r.status,
+      archived: r.archived, archivedAt: r.archived_at,
+    })));
+  };
+
+  const loadFirstCommunions = async (cid) => {
+    const { data } = await supabase.from('first_communions').select('*').eq('church_id', cid);
+    if (data) setFirstCommunions(data.map(r => ({
+      id: r.id, churchId: r.church_id, registerNumber: r.register_number,
+      childName: r.child_name, childBirthDate: r.child_birth_date, childGender: r.child_gender,
+      baptismDate: r.baptism_date, baptismChurch: r.baptism_church,
+      fatherName: r.father_name, motherName: r.mother_name,
+      parentsAddress: r.parents_address, parentsPhone: r.parents_phone,
+      catechismClass: r.catechism_class, catechismTeacher: r.catechism_teacher,
+      classesCompleted: r.classes_completed, retreatAttended: r.retreat_attended,
+      firstCommunionDate: r.first_communion_date, firstCommunionMass: r.first_communion_mass,
+      celebrantPriest: r.celebrant_priest, godparents: r.godparents,
+      baptismCertFile: r.baptism_cert_file,
+      certificateIssued: r.certificate_issued,
+      scheduleMass: r.schedule_mass, massDate: r.mass_date,
+      massTime: r.mass_time, massLocation: r.mass_location,
+      notes: r.notes, status: r.status,
+      archived: r.archived, archivedAt: r.archived_at,
+    })));
+  };
+
+  const loadMarriages = async (cid) => {
+    const { data } = await supabase.from('marriages').select('*').eq('church_id', cid);
+    if (data) setMarriages(data.map(r => ({
+      id: r.id, churchId: r.church_id, registerNumber: r.register_number,
+      groomName: r.groom_name, groomBirthDate: r.groom_birth_date,
+      groomBaptismDate: r.groom_baptism_date, groomBaptismChurch: r.groom_baptism_church,
+      groomFatherName: r.groom_father_name, groomMotherName: r.groom_mother_name,
+      groomConfirmed: r.groom_confirmed,
+      groomBaptismCertFile: r.groom_baptism_cert_file,
+      groomConfirmationCertFile: r.groom_confirmation_cert_file,
+      brideName: r.bride_name, brideBirthDate: r.bride_birth_date,
+      brideBaptismDate: r.bride_baptism_date, brideBaptismChurch: r.bride_baptism_church,
+      brideFatherName: r.bride_father_name, brideMotherName: r.bride_mother_name,
+      brideConfirmed: r.bride_confirmed,
+      brideBaptismCertFile: r.bride_baptism_cert_file,
+      brideConfirmationCertFile: r.bride_confirmation_cert_file,
+      marriageLicenseFile: r.marriage_license_file,
+      weddingDate: r.wedding_date, weddingTime: r.wedding_time,
+      weddingLocation: r.wedding_location, celebratingPriest: r.celebrating_priest,
+      includeMass: r.include_mass,
+      preCanaCompleted: r.pre_cana_completed, preCanaDate: r.pre_cana_date,
+      banns1Date: r.banns1_date, banns1Done: r.banns1_done,
+      banns2Date: r.banns2_date, banns2Done: r.banns2_done,
+      banns3Date: r.banns3_date, banns3Done: r.banns3_done,
+      bestMan: r.best_man, maidOfHonor: r.maid_of_honor,
+      witnesses: r.witnesses || [],
+      marriageLicenseNumber: r.marriage_license_number,
+      marriageLicenseDate: r.marriage_license_date,
+      certificateIssued: r.certificate_issued,
+      scheduleMass: r.schedule_mass, massDate: r.mass_date,
+      massTime: r.mass_time, massLocation: r.mass_location,
+      notes: r.notes,
+      archived: r.archived, archivedAt: r.archived_at,
+    })));
+  };
+
+  const loadFunerals = async (cid) => {
+    const { data } = await supabase.from('funerals').select('*').eq('church_id', cid);
+    if (data) setFunerals(data.map(r => ({
+      id: r.id, churchId: r.church_id, registerNumber: r.register_number,
+      deceasedName: r.deceased_name, deceasedAge: r.deceased_age,
+      deceasedGender: r.deceased_gender, dateOfDeath: r.date_of_death,
+      placeOfDeath: r.place_of_death, causeOfDeath: r.cause_of_death,
+      religion: r.religion,
+      funeralMassDate: r.funeral_mass_date, funeralMassTime: r.funeral_mass_time,
+      funeralLocation: r.funeral_location, celebratingPriest: r.celebrating_priest,
+      burialDate: r.burial_date, burialLocation: r.burial_location, burialType: r.burial_type,
+      vigil: r.vigil, vigilDate: r.vigil_date, vigilTime: r.vigil_time, vigilLocation: r.vigil_location,
+      requestedBy: r.requested_by, relationship: r.relationship, contactNumber: r.contact_number,
+      deathCertFile: r.death_cert_file,
+      certificateIssued: r.certificate_issued,
+      scheduleMass: r.schedule_mass, massDate: r.mass_date,
+      massTime: r.mass_time, massLocation: r.mass_location,
+      notes: r.notes,
+      archived: r.archived, archivedAt: r.archived_at,
+    })));
+  };
+
+  const loadTransactions = async (cid) => {
+    const { data } = await supabase.from('transactions').select('*').eq('church_id', cid);
+    if (data) setTransactions(data.map(r => ({
+      id: r.id, churchId: r.church_id, type: r.type,
+      category: r.category, customCategory: r.custom_category,
+      amount: r.amount, date: r.date, method: r.method,
+      payer: r.payer, description: r.description,
+      status: r.status, archived: r.archived, archivedAt: r.archived_at,
+    })));
+  };
+
+  const loadEventRequests = async (cid) => {
+    const { data } = await supabase.from('event_requests').select('*').eq('church_id', cid).order('created_at', { ascending: false });
+    if (data) setEventRequests(data.map(r => ({
+      id: r.id, churchId: r.church_id, referenceNumber: r.reference_number,
+      fullName: r.full_name, contact: r.contact, email: r.email,
+      eventType: r.event_type, preferredDate: r.preferred_date, preferredTime: r.preferred_time,
+      location: r.location, notes: r.notes, status: r.status, assignedPriest: r.assigned_priest,
+    })));
+  };
+
+  const loadRecordRequests = async (cid) => {
+    const { data } = await supabase.from('record_requests').select('*').eq('church_id', cid).order('created_at', { ascending: false });
+    if (data) setRecordRequests(data.map(r => ({
+      id: r.id, churchId: r.church_id, referenceNumber: r.reference_number,
+      fullName: r.full_name, contact: r.contact, email: r.email,
+      recordType: r.record_type, notes: r.notes, status: r.status,
+    })));
+  };
+
+  const loadMembershipRequests = async (cid) => {
+    const { data } = await supabase.from('membership_requests').select('*').eq('church_id', cid).order('created_at', { ascending: false });
+    if (data) setMembershipRequests(data.map(r => ({
+      id: r.id, churchId: r.church_id, referenceNumber: r.reference_number,
+      firstName: r.first_name, middleName: r.middle_name, lastName: r.last_name,
+      gender: r.gender, birthday: r.birthday,
+      contact: r.contact, email: r.email, address: r.address,
+      ministry: r.ministry, notes: r.notes, photo: r.photo, status: r.status,
+    })));
+  };
+
+  const loadBulletins = async (cid) => {
+    const { data } = await supabase.from('bulletins').select('*').eq('church_id', cid).order('created_at', { ascending: false });
+    if (data) setBulletins(data.map(r => ({
+      id: r.id, churchId: r.church_id, title: r.title,
+      category: r.category, content: r.content, author: r.author,
+      pinned: r.pinned, createdAt: r.created_at,
+    })));
+  };
+
+  const loadMassSchedules = async (cid) => {
+    const { data } = await supabase.from('mass_schedules').select('*').eq('church_id', cid);
+    if (data) setMassSchedules(data.map(r => ({
+      id: r.id, churchId: r.church_id,
+      day: r.day, time: r.time, type: r.type,
+      priest: r.priest, location: r.location,
+      language: r.language, notes: r.notes,
+    })));
+  };
+
+  const loadActivityLog = async (cid) => {
+    const { data } = await supabase.from('activity_log').select('*').eq('church_id', cid).order('created_at', { ascending: false }).limit(200);
+    if (data) setActivityLog(data.map(r => ({
+      id: r.id, action: r.action, category: r.category,
+      detail: r.detail, timestamp: r.created_at,
+    })));
+  };
+
+  const loadClerkAccounts = async (cid) => {
+    const { data } = await supabase.from('clerk_accounts').select('*').eq('church_id', cid);
+    if (data) setClerkAccounts(data.map(r => ({
+      id: r.id, churchId: r.church_id, authUserId: r.auth_user_id,
+      firstName: r.first_name, lastName: r.last_name,
+      username: r.username, email: r.email,
+      role: r.role, parish: r.parish, phone: r.phone, active: r.active,
+    })));
+  };
+
+  // ── Activity Log ──────────────────────────────────────────────────────────
+  const addLog = async (action, category, detail) => {
+    if (!currentChurch) return;
+    const { data } = await supabase.from('activity_log')
+      .insert({ church_id: currentChurch.id, action, category, detail })
+      .select().single();
+    if (data) setActivityLog(prev => [{
+      id: data.id, action: data.action, category: data.category,
+      detail: data.detail, timestamp: data.created_at,
+    }, ...prev].slice(0, 200));
+  };
+
+  const genRef = (prefix) => `${prefix}-${Date.now().toString().slice(-6)}`;
+
+  // ── EVENTS ────────────────────────────────────────────────────────────────
+  const addEvent = async (ev) => {
+    const { data, error } = await supabase.from('events').insert({
+      church_id: currentChurch.id,
+      title: ev.title, date: ev.date, time: ev.time,
+      type: ev.type, location: ev.location, priest: ev.priest,
+      language: ev.language, notes: ev.notes,
+      status: ev.status || 'approved', archived: false, done: false,
+    }).select().single();
+    if (error) { console.error('addEvent error:', error); return; }
+    if (data) {
+      setEvents(prev => [...prev, {
+        id: data.id, churchId: data.church_id, title: data.title,
+        date: data.date, time: data.time, type: data.type,
+        location: data.location, priest: data.priest,
+        status: data.status, done: data.done, archived: data.archived,
+      }]);
+      addLog('Added', 'Event', `"${ev.title}" on ${ev.date}`);
+    }
+  };
+
+  const updateEvent = async (id, ev) => {
+    await supabase.from('events').update({
+      title: ev.title, date: ev.date, time: ev.time,
+      type: ev.type, location: ev.location, priest: ev.priest,
+      language: ev.language, notes: ev.notes,
+    }).eq('id', id);
+    setEvents(prev => prev.map(e => e.id === id ? { ...e, ...ev } : e));
+  };
+
+  const archiveEvent = async (id) => {
     const e = events.find(x => x.id === id);
-    setEvents(prev => prev.map(x => x.id === id ? { ...x, archived: true, archivedAt: new Date().toISOString() } : x));
+    await supabase.from('events').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', id);
+    setEvents(prev => prev.map(x => x.id === id ? { ...x, archived: true } : x));
     if (e) addLog('Archived', 'Event', `"${e.title}"`);
   };
-  const markEventDone = (id) => {
-    const e = events.find(x => x.id === id);
+
+  const markEventDone = async (id) => {
+    await supabase.from('events').update({ done: true }).eq('id', id);
     setEvents(prev => prev.map(x => x.id === id ? { ...x, done: true } : x));
-    if (e) addLog('Completed', 'Event', `"${e.title}" marked as done`);
-  };
-  const restoreEvent = (id) => {
-    const e = events.find(x => x.id === id);
-    setEvents(prev => prev.map(x => x.id === id ? { ...x, archived: false, done: false } : x));
-    if (e) addLog('Restored', 'Event', `"${e.title}"`);
-  };
-  const deleteEvent = (id) => {
-    const e = events.find(x => x.id === id);
-    setEvents(prev => prev.filter(x => x.id !== id));
-    if (e) addLog('Deleted', 'Event', `"${e.title}" permanently deleted`);
   };
 
-  // ── Members ───────────────────────────────────────────────────────────────
-  const addMember = (m) => {
-    setMembers(prev => [...prev, { ...m, id: Date.now(), archived: false }]);
-    addLog('Added', 'Member', `${m.firstName} ${m.lastName} — ${m.ministry}`);
+  const restoreEvent = async (id) => {
+    await supabase.from('events').update({ archived: false, done: false }).eq('id', id);
+    setEvents(prev => prev.map(x => x.id === id ? { ...x, archived: false, done: false } : x));
   };
-  const updateMember = (id, data) => setMembers(prev => prev.map(m => m.id === id ? { ...m, ...data } : m));
-  const archiveMember = (id) => {
+
+  const deleteEvent = async (id) => {
+    await supabase.from('events').delete().eq('id', id);
+    setEvents(prev => prev.filter(x => x.id !== id));
+  };
+
+  // ── MEMBERS ───────────────────────────────────────────────────────────────
+  const addMember = async (m) => {
+    const { data, error } = await supabase.from('members').insert({
+      church_id: currentChurch.id,
+      last_name: m.lastName, first_name: m.firstName, middle_name: m.middleName,
+      gender: m.gender, birthday: m.birthday, address: m.address,
+      contact: m.contact, email: m.email, ministry: m.ministry,
+      role: m.role, status: m.status,
+      skills: m.skills || [], availability: m.availability || [],
+      joined: m.joined, baptized: m.baptized, confirmed: m.confirmed,
+      first_communion: m.firstCommunion, photo: m.photo || '',
+      archived: false,
+    }).select().single();
+    if (error) { console.error('addMember error:', error); return; }
+    if (data) {
+      setMembers(prev => [...prev, {
+        id: data.id, churchId: data.church_id,
+        lastName: data.last_name, firstName: data.first_name, middleName: data.middle_name,
+        gender: data.gender, birthday: data.birthday, address: data.address,
+        contact: data.contact, email: data.email, ministry: data.ministry,
+        role: data.role, status: data.status,
+        skills: data.skills || [], availability: data.availability || [],
+        joined: data.joined, baptized: data.baptized, confirmed: data.confirmed,
+        firstCommunion: data.first_communion, photo: data.photo,
+        archived: false,
+      }]);
+      addLog('Added', 'Member', `${m.firstName} ${m.lastName}`);
+    }
+  };
+
+  const updateMember = async (id, m) => {
+    await supabase.from('members').update({
+      last_name: m.lastName, first_name: m.firstName, middle_name: m.middleName,
+      gender: m.gender, birthday: m.birthday, address: m.address,
+      contact: m.contact, email: m.email, ministry: m.ministry,
+      role: m.role, status: m.status,
+      skills: m.skills || [], availability: m.availability || [],
+      joined: m.joined, baptized: m.baptized, confirmed: m.confirmed,
+      first_communion: m.firstCommunion, photo: m.photo || '',
+    }).eq('id', id);
+    setMembers(prev => prev.map(x => x.id === id ? { ...x, ...m } : x));
+  };
+
+  const archiveMember = async (id) => {
     const m = members.find(x => x.id === id);
-    setMembers(prev => prev.map(x => x.id === id ? { ...x, archived: true, archivedAt: new Date().toISOString() } : x));
+    await supabase.from('members').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', id);
+    setMembers(prev => prev.map(x => x.id === id ? { ...x, archived: true } : x));
     if (m) addLog('Archived', 'Member', `${m.firstName} ${m.lastName}`);
   };
-  const restoreMember = (id) => {
-    const m = members.find(x => x.id === id);
+
+  const restoreMember = async (id) => {
+    await supabase.from('members').update({ archived: false }).eq('id', id);
     setMembers(prev => prev.map(x => x.id === id ? { ...x, archived: false } : x));
-    if (m) addLog('Restored', 'Member', `${m.firstName} ${m.lastName}`);
-  };
-  const deleteMember = (id) => {
-    const m = members.find(x => x.id === id);
-    setMembers(prev => prev.filter(x => x.id !== id));
-    if (m) addLog('Deleted', 'Member', `${m.firstName} ${m.lastName} permanently deleted`);
   };
 
-  // ── Priests ───────────────────────────────────────────────────────────────
-  const addPriest = (p) => {
-    setPriests(prev => [...prev, { ...p, id: Date.now(), archived: false }]);
-    addLog('Added', 'Priest', `${p.title} ${p.firstName} ${p.lastName}`);
+  const deleteMember = async (id) => {
+    await supabase.from('members').delete().eq('id', id);
+    setMembers(prev => prev.filter(x => x.id !== id));
   };
-  const updatePriest = (id, data) => setPriests(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
-  const archivePriest = (id) => {
+
+  // ── PRIESTS ───────────────────────────────────────────────────────────────
+  const addPriest = async (p) => {
+    const { data, error } = await supabase.from('priests').insert({
+      church_id: currentChurch.id,
+      title: p.title, last_name: p.lastName, first_name: p.firstName,
+      middle_name: p.middleName, suffix: p.suffix, birthday: p.birthday,
+      address: p.address, contact: p.contact, email: p.email,
+      specialization: p.specialization, assigned_parish: p.assignedParish,
+      status: p.status, ordained_date: p.ordainedDate, notes: p.notes,
+      archived: false,
+    }).select().single();
+    if (error) { console.error('addPriest error:', error); return; }
+    if (data) {
+      setPriests(prev => [...prev, {
+        id: data.id, churchId: data.church_id,
+        title: data.title, lastName: data.last_name, firstName: data.first_name,
+        middleName: data.middle_name, suffix: data.suffix, birthday: data.birthday,
+        address: data.address, contact: data.contact, email: data.email,
+        specialization: data.specialization, assignedParish: data.assigned_parish,
+        status: data.status, ordainedDate: data.ordained_date, notes: data.notes,
+        archived: false,
+      }]);
+      addLog('Added', 'Priest', `${p.title} ${p.firstName} ${p.lastName}`);
+    }
+  };
+
+  const updatePriest = async (id, p) => {
+    await supabase.from('priests').update({
+      title: p.title, last_name: p.lastName, first_name: p.firstName,
+      middle_name: p.middleName, suffix: p.suffix, birthday: p.birthday,
+      address: p.address, contact: p.contact, email: p.email,
+      specialization: p.specialization, assigned_parish: p.assignedParish,
+      status: p.status, ordained_date: p.ordainedDate, notes: p.notes,
+    }).eq('id', id);
+    setPriests(prev => prev.map(x => x.id === id ? { ...x, ...p } : x));
+  };
+
+  const archivePriest = async (id) => {
     const p = priests.find(x => x.id === id);
-    setPriests(prev => prev.map(x => x.id === id ? { ...x, archived: true, archivedAt: new Date().toISOString() } : x));
+    await supabase.from('priests').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', id);
+    setPriests(prev => prev.map(x => x.id === id ? { ...x, archived: true } : x));
     if (p) addLog('Archived', 'Priest', `${p.title} ${p.firstName} ${p.lastName}`);
   };
-  const restorePriest = (id) => {
-    const p = priests.find(x => x.id === id);
+
+  const restorePriest = async (id) => {
+    await supabase.from('priests').update({ archived: false }).eq('id', id);
     setPriests(prev => prev.map(x => x.id === id ? { ...x, archived: false } : x));
-    if (p) addLog('Restored', 'Priest', `${p.title} ${p.firstName} ${p.lastName}`);
-  };
-  const deletePriest = (id) => {
-    const p = priests.find(x => x.id === id);
-    setPriests(prev => prev.filter(x => x.id !== id));
-    if (p) addLog('Deleted', 'Priest', `${p.title} ${p.firstName} ${p.lastName} permanently deleted`);
   };
 
-  // ── Parishioners ──────────────────────────────────────────────────────────
-  const addParishioner = (p) => {
-    setParishioners(prev => [...prev, { ...p, id: Date.now(), archived: false }]);
-    addLog('Added', 'Parishioner', `${p.firstName} ${p.lastName}`);
+  const deletePriest = async (id) => {
+    await supabase.from('priests').delete().eq('id', id);
+    setPriests(prev => prev.filter(x => x.id !== id));
   };
-  const updateParishioner = (id, data) => setParishioners(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
-  const archiveParishioner = (id) => {
+
+  // ── PARISHIONERS ──────────────────────────────────────────────────────────
+  const addParishioner = async (p) => {
+    const { data, error } = await supabase.from('parishioners').insert({
+      church_id: currentChurch.id,
+      last_name: p.lastName, first_name: p.firstName, middle_name: p.middleName,
+      suffix: p.suffix, birthdate: p.birthdate, birthplace: p.birthplace,
+      sex: p.sex, father_name: p.fatherName, mother_name: p.motherName,
+      address: p.address, city: p.city, province: p.province,
+      contact: p.contact, email: p.email, archived: false,
+    }).select().single();
+    if (error) { console.error('addParishioner error:', error); return; }
+    if (data) {
+      setParishioners(prev => [...prev, {
+        id: data.id, churchId: data.church_id,
+        lastName: data.last_name, firstName: data.first_name, middleName: data.middle_name,
+        suffix: data.suffix, birthdate: data.birthdate, birthplace: data.birthplace,
+        sex: data.sex, fatherName: data.father_name, motherName: data.mother_name,
+        address: data.address, city: data.city, province: data.province,
+        contact: data.contact, email: data.email, archived: false,
+      }]);
+      addLog('Added', 'Parishioner', `${p.firstName} ${p.lastName}`);
+    }
+  };
+
+  const updateParishioner = async (id, p) => {
+    await supabase.from('parishioners').update({
+      last_name: p.lastName, first_name: p.firstName, middle_name: p.middleName,
+      suffix: p.suffix, birthdate: p.birthdate, birthplace: p.birthplace,
+      sex: p.sex, father_name: p.fatherName, mother_name: p.motherName,
+      address: p.address, city: p.city, province: p.province,
+      contact: p.contact, email: p.email,
+    }).eq('id', id);
+    setParishioners(prev => prev.map(x => x.id === id ? { ...x, ...p } : x));
+  };
+
+  const archiveParishioner = async (id) => {
     const p = parishioners.find(x => x.id === id);
-    setParishioners(prev => prev.map(x => x.id === id ? { ...x, archived: true, archivedAt: new Date().toISOString() } : x));
+    await supabase.from('parishioners').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', id);
+    setParishioners(prev => prev.map(x => x.id === id ? { ...x, archived: true } : x));
     if (p) addLog('Archived', 'Parishioner', `${p.firstName} ${p.lastName}`);
   };
-  const restoreParishioner = (id) => {
-    const p = parishioners.find(x => x.id === id);
+
+  const restoreParishioner = async (id) => {
+    await supabase.from('parishioners').update({ archived: false }).eq('id', id);
     setParishioners(prev => prev.map(x => x.id === id ? { ...x, archived: false } : x));
-    if (p) addLog('Restored', 'Parishioner', `${p.firstName} ${p.lastName}`);
   };
-  const deleteParishioner = (id) => {
-    const p = parishioners.find(x => x.id === id);
+
+  const deleteParishioner = async (id) => {
+    await supabase.from('parishioners').delete().eq('id', id);
     setParishioners(prev => prev.filter(x => x.id !== id));
-    if (p) addLog('Deleted', 'Parishioner', `${p.firstName} ${p.lastName} permanently deleted`);
   };
 
-  // ── Sacraments ────────────────────────────────────────────────────────────
-  const addBaptism = (b) => {
-    const exists = baptisms.find(x => x.id === b.id);
-    setBaptisms(prev => exists ? prev.map(x => x.id === b.id ? { ...b } : x) : [...prev, { ...b, id: b.id || Date.now(), archived: false }]);
-    addLog(exists ? 'Updated' : 'Added', 'Baptism', `${b.childName} — ${b.registerNumber}`);
+  // ── BAPTISMS ──────────────────────────────────────────────────────────────
+  const addBaptism = async (b) => {
+    const isUpdate = b.id && baptisms.find(x => x.id === b.id);
+    const payload = {
+      church_id: currentChurch.id,
+      register_number: b.registerNumber,
+      child_name: b.childName, child_birth_date: b.childBirthDate,
+      child_birth_place: b.childBirthPlace, child_gender: b.childGender,
+      father_name: b.fatherName, father_religion: b.fatherReligion,
+      mother_name: b.motherName, mother_religion: b.motherReligion,
+      parents_address: b.parentsAddress, parents_phone: b.parentsPhone,
+      parents_married_in_church: b.parentsMarriedInChurch,
+      godparents: b.godparents || [],
+      baptism_date: b.baptismDate, baptism_time: b.baptismTime,
+      location: b.location, priest: b.priest,
+      birth_certificate_submitted: b.birthCertificateSubmitted,
+      marriage_certificate_submitted: b.marriageCertificateSubmitted,
+      birth_cert_file: b.birthCertFile || null,
+      marriage_cert_file: b.marriageCertFile || null,
+      certificate_issued: b.certificateIssued,
+      schedule_mass: b.scheduleMass, mass_date: b.massDate,
+      mass_time: b.massTime, mass_location: b.massLocation,
+      notes: b.notes, status: b.status || 'application', archived: false,
+    };
+    if (isUpdate) {
+      await supabase.from('baptisms').update(payload).eq('id', b.id);
+      setBaptisms(prev => prev.map(x => x.id === b.id ? { ...x, ...b } : x));
+      addLog('Updated', 'Baptism', `${b.childName}`);
+    } else {
+      const { data, error } = await supabase.from('baptisms').insert(payload).select().single();
+      if (error) { console.error('addBaptism error:', error); return; }
+      if (data) { setBaptisms(prev => [...prev, { ...b, id: data.id }]); addLog('Added', 'Baptism', `${b.childName}`); }
+    }
   };
-  const archiveBaptism = (id) => {
-    const b = baptisms.find(x => x.id === id);
-    setBaptisms(prev => prev.map(x => x.id === id ? { ...x, archived: true, archivedAt: new Date().toISOString() } : x));
-    if (b) addLog('Archived', 'Baptism', `${b.childName}`);
+
+  const archiveBaptism = async (id) => {
+    await supabase.from('baptisms').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', id);
+    setBaptisms(prev => prev.map(x => x.id === id ? { ...x, archived: true } : x));
   };
-  const restoreBaptism = (id) => {
-    const b = baptisms.find(x => x.id === id);
+
+  const restoreBaptism = async (id) => {
+    await supabase.from('baptisms').update({ archived: false }).eq('id', id);
     setBaptisms(prev => prev.map(x => x.id === id ? { ...x, archived: false } : x));
-    if (b) addLog('Restored', 'Baptism', `${b.childName}`);
   };
-  const deleteBaptism = (id) => {
-    const b = baptisms.find(x => x.id === id);
+
+  const deleteBaptism = async (id) => {
+    await supabase.from('baptisms').delete().eq('id', id);
     setBaptisms(prev => prev.filter(x => x.id !== id));
-    if (b) addLog('Deleted', 'Baptism', `${b.childName} permanently deleted`);
   };
 
-  const addConfirmation = (c) => {
-    const exists = confirmations.find(x => x.id === c.id);
-    setConfirmations(prev => exists ? prev.map(x => x.id === c.id ? { ...c } : x) : [...prev, { ...c, id: c.id || Date.now(), archived: false }]);
-    addLog(exists ? 'Updated' : 'Added', 'Confirmation', `${c.candidateName} — ${c.registerNumber}`);
-  };
-  const archiveConfirmation = (id) => {
-    const c = confirmations.find(x => x.id === id);
-    setConfirmations(prev => prev.map(x => x.id === id ? { ...x, archived: true, archivedAt: new Date().toISOString() } : x));
-    if (c) addLog('Archived', 'Confirmation', `${c.candidateName}`);
-  };
-  const restoreConfirmation = (id) => {
-    const c = confirmations.find(x => x.id === id);
-    setConfirmations(prev => prev.map(x => x.id === id ? { ...x, archived: false } : x));
-    if (c) addLog('Restored', 'Confirmation', `${c.candidateName}`);
-  };
-  const deleteConfirmation = (id) => {
-    const c = confirmations.find(x => x.id === id);
-    setConfirmations(prev => prev.filter(x => x.id !== id));
-    if (c) addLog('Deleted', 'Confirmation', `${c.candidateName} permanently deleted`);
+  // ── FIRST COMMUNIONS ──────────────────────────────────────────────────────
+  const addFirstCommunion = async (fc) => {
+    const isUpdate = fc.id && firstCommunions.find(x => x.id === fc.id);
+    const payload = {
+      church_id: currentChurch.id,
+      register_number: fc.registerNumber,
+      child_name: fc.childName, child_birth_date: fc.childBirthDate, child_gender: fc.childGender,
+      baptism_date: fc.baptismDate, baptism_church: fc.baptismChurch,
+      father_name: fc.fatherName, mother_name: fc.motherName,
+      parents_address: fc.parentsAddress, parents_phone: fc.parentsPhone,
+      catechism_class: fc.catechismClass, catechism_teacher: fc.catechismTeacher,
+      classes_completed: fc.classesCompleted, retreat_attended: fc.retreatAttended,
+      first_communion_date: fc.firstCommunionDate, first_communion_mass: fc.firstCommunionMass,
+      celebrant_priest: fc.celebrantPriest, godparents: fc.godparents,
+      baptism_cert_file: fc.baptismCertFile || null,
+      certificate_issued: fc.certificateIssued,
+      schedule_mass: fc.scheduleMass, mass_date: fc.massDate,
+      mass_time: fc.massTime, mass_location: fc.massLocation,
+      notes: fc.notes, status: fc.status || 'registered', archived: false,
+    };
+    if (isUpdate) {
+      await supabase.from('first_communions').update(payload).eq('id', fc.id);
+      setFirstCommunions(prev => prev.map(x => x.id === fc.id ? { ...x, ...fc } : x));
+    } else {
+      const { data, error } = await supabase.from('first_communions').insert(payload).select().single();
+      if (error) { console.error('addFirstCommunion error:', error); return; }
+      if (data) setFirstCommunions(prev => [...prev, { ...fc, id: data.id }]);
+    }
+    addLog(isUpdate ? 'Updated' : 'Added', 'First Communion', `${fc.childName}`);
   };
 
-  const addFirstCommunion = (fc) => {
-    const exists = firstCommunions.find(x => x.id === fc.id);
-    setFirstCommunions(prev => exists ? prev.map(x => x.id === fc.id ? { ...fc } : x) : [...prev, { ...fc, id: fc.id || Date.now(), archived: false }]);
-    addLog(exists ? 'Updated' : 'Added', 'First Communion', `${fc.childName} — ${fc.registerNumber}`);
+  const archiveFirstCommunion = async (id) => {
+    await supabase.from('first_communions').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', id);
+    setFirstCommunions(prev => prev.map(x => x.id === id ? { ...x, archived: true } : x));
   };
-  const archiveFirstCommunion = (id) => {
-    const fc = firstCommunions.find(x => x.id === id);
-    setFirstCommunions(prev => prev.map(x => x.id === id ? { ...x, archived: true, archivedAt: new Date().toISOString() } : x));
-    if (fc) addLog('Archived', 'First Communion', `${fc.childName}`);
-  };
-  const restoreFirstCommunion = (id) => {
-    const fc = firstCommunions.find(x => x.id === id);
+
+  const restoreFirstCommunion = async (id) => {
+    await supabase.from('first_communions').update({ archived: false }).eq('id', id);
     setFirstCommunions(prev => prev.map(x => x.id === id ? { ...x, archived: false } : x));
-    if (fc) addLog('Restored', 'First Communion', `${fc.childName}`);
   };
-  const deleteFirstCommunion = (id) => {
-    const fc = firstCommunions.find(x => x.id === id);
+
+  const deleteFirstCommunion = async (id) => {
+    await supabase.from('first_communions').delete().eq('id', id);
     setFirstCommunions(prev => prev.filter(x => x.id !== id));
-    if (fc) addLog('Deleted', 'First Communion', `${fc.childName} permanently deleted`);
   };
 
-  const addMarriage = (m) => {
-    const exists = marriages.find(x => x.id === m.id);
-    setMarriages(prev => exists ? prev.map(x => x.id === m.id ? { ...m } : x) : [...prev, { ...m, id: m.id || Date.now(), archived: false }]);
-    addLog(exists ? 'Updated' : 'Added', 'Marriage', `${m.groomName} & ${m.brideName} — ${m.registerNumber}`);
+  // ── CONFIRMATIONS ─────────────────────────────────────────────────────────
+  const addConfirmation = async (c) => {
+    const isUpdate = c.id && confirmations.find(x => x.id === c.id);
+    const payload = {
+      church_id: currentChurch.id,
+      register_number: c.registerNumber,
+      candidate_name: c.candidateName, candidate_birth_date: c.candidateBirthDate,
+      candidate_gender: c.candidateGender, candidate_age: c.candidateAge,
+      baptism_date: c.baptismDate, baptism_church: c.baptismChurch,
+      first_communion_date: c.firstCommunionDate, first_communion_church: c.firstCommunionChurch,
+      father_name: c.fatherName, mother_name: c.motherName, guardian_name: c.guardianName,
+      parents_address: c.parentsAddress, parents_phone: c.parentsPhone,
+      confirmation_name: c.confirmationName, confirmation_date: c.confirmationDate,
+      confirmation_mass: c.confirmationMass, celebrant_bishop: c.celebrantBishop,
+      sponsor_name: c.sponsorName, sponsor_gender: c.sponsorGender,
+      sponsor_religion: c.sponsorReligion, sponsor_phone: c.sponsorPhone,
+      catechism_class: c.catechismClass, catechism_teacher: c.catechismTeacher,
+      classes_completed: c.classesCompleted, retreat_attended: c.retreatAttended,
+      service_hours: c.serviceHours,
+      sponsor_letter_submitted: c.sponsorLetterSubmitted,
+      sponsor_letter_file: c.sponsorLetterFile || null,
+      baptism_cert_file: c.baptismCertFile || null,
+      certificate_issued: c.certificateIssued,
+      schedule_mass: c.scheduleMass, mass_date: c.massDate,
+      mass_time: c.massTime, mass_location: c.massLocation,
+      notes: c.notes, status: c.status || 'registered', archived: false,
+    };
+    if (isUpdate) {
+      await supabase.from('confirmations').update(payload).eq('id', c.id);
+      setConfirmations(prev => prev.map(x => x.id === c.id ? { ...x, ...c } : x));
+    } else {
+      const { data, error } = await supabase.from('confirmations').insert(payload).select().single();
+      if (error) { console.error('addConfirmation error:', error); return; }
+      if (data) setConfirmations(prev => [...prev, { ...c, id: data.id }]);
+    }
+    addLog(isUpdate ? 'Updated' : 'Added', 'Confirmation', `${c.candidateName}`);
   };
-  const archiveMarriage = (id) => {
-    const m = marriages.find(x => x.id === id);
-    setMarriages(prev => prev.map(x => x.id === id ? { ...x, archived: true, archivedAt: new Date().toISOString() } : x));
-    if (m) addLog('Archived', 'Marriage', `${m.groomName} & ${m.brideName}`);
+
+  const archiveConfirmation = async (id) => {
+    await supabase.from('confirmations').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', id);
+    setConfirmations(prev => prev.map(x => x.id === id ? { ...x, archived: true } : x));
   };
-  const restoreMarriage = (id) => {
-    const m = marriages.find(x => x.id === id);
+
+  const restoreConfirmation = async (id) => {
+    await supabase.from('confirmations').update({ archived: false }).eq('id', id);
+    setConfirmations(prev => prev.map(x => x.id === id ? { ...x, archived: false } : x));
+  };
+
+  const deleteConfirmation = async (id) => {
+    await supabase.from('confirmations').delete().eq('id', id);
+    setConfirmations(prev => prev.filter(x => x.id !== id));
+  };
+
+  // ── MARRIAGES ─────────────────────────────────────────────────────────────
+  const addMarriage = async (m) => {
+    const isUpdate = m.id && marriages.find(x => x.id === m.id);
+    const payload = {
+      church_id: currentChurch.id,
+      register_number: m.registerNumber,
+      groom_name: m.groomName, groom_birth_date: m.groomBirthDate,
+      groom_baptism_date: m.groomBaptismDate, groom_baptism_church: m.groomBaptismChurch,
+      groom_father_name: m.groomFatherName, groom_mother_name: m.groomMotherName,
+      groom_confirmed: m.groomConfirmed,
+      groom_baptism_cert_file: m.groomBaptismCertFile || null,
+      groom_confirmation_cert_file: m.groomConfirmationCertFile || null,
+      bride_name: m.brideName, bride_birth_date: m.brideBirthDate,
+      bride_baptism_date: m.brideBaptismDate, bride_baptism_church: m.brideBaptismChurch,
+      bride_father_name: m.brideFatherName, bride_mother_name: m.brideMotherName,
+      bride_confirmed: m.brideConfirmed,
+      bride_baptism_cert_file: m.brideBaptismCertFile || null,
+      bride_confirmation_cert_file: m.brideConfirmationCertFile || null,
+      marriage_license_file: m.marriageLicenseFile || null,
+      wedding_date: m.weddingDate, wedding_time: m.weddingTime,
+      wedding_location: m.weddingLocation, celebrating_priest: m.celebratingPriest,
+      include_mass: m.includeMass,
+      pre_cana_completed: m.preCanaCompleted, pre_cana_date: m.preCanaDate,
+      banns1_date: m.banns1Date, banns1_done: m.banns1Done,
+      banns2_date: m.banns2Date, banns2_done: m.banns2Done,
+      banns3_date: m.banns3Date, banns3_done: m.banns3Done,
+      best_man: m.bestMan, maid_of_honor: m.maidOfHonor,
+      witnesses: m.witnesses || [],
+      marriage_license_number: m.marriageLicenseNumber,
+      marriage_license_date: m.marriageLicenseDate,
+      certificate_issued: m.certificateIssued,
+      schedule_mass: m.scheduleMass, mass_date: m.massDate,
+      mass_time: m.massTime, mass_location: m.massLocation,
+      notes: m.notes, archived: false,
+    };
+    if (isUpdate) {
+      await supabase.from('marriages').update(payload).eq('id', m.id);
+      setMarriages(prev => prev.map(x => x.id === m.id ? { ...x, ...m } : x));
+    } else {
+      const { data, error } = await supabase.from('marriages').insert(payload).select().single();
+      if (error) { console.error('addMarriage error:', error); return; }
+      if (data) setMarriages(prev => [...prev, { ...m, id: data.id }]);
+    }
+    addLog(isUpdate ? 'Updated' : 'Added', 'Marriage', `${m.groomName} & ${m.brideName}`);
+  };
+
+  const archiveMarriage = async (id) => {
+    await supabase.from('marriages').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', id);
+    setMarriages(prev => prev.map(x => x.id === id ? { ...x, archived: true } : x));
+  };
+
+  const restoreMarriage = async (id) => {
+    await supabase.from('marriages').update({ archived: false }).eq('id', id);
     setMarriages(prev => prev.map(x => x.id === id ? { ...x, archived: false } : x));
-    if (m) addLog('Restored', 'Marriage', `${m.groomName} & ${m.brideName}`);
   };
-  const deleteMarriage = (id) => {
-    const m = marriages.find(x => x.id === id);
+
+  const deleteMarriage = async (id) => {
+    await supabase.from('marriages').delete().eq('id', id);
     setMarriages(prev => prev.filter(x => x.id !== id));
-    if (m) addLog('Deleted', 'Marriage', `${m.groomName} & ${m.brideName} permanently deleted`);
   };
 
-  const addFuneral = (f) => {
-    const exists = funerals.find(x => x.id === f.id);
-    setFunerals(prev => exists ? prev.map(x => x.id === f.id ? { ...f } : x) : [...prev, { ...f, id: f.id || Date.now(), archived: false }]);
-    addLog(exists ? 'Updated' : 'Added', 'Funeral', `${f.deceasedName} — ${f.registerNumber}`);
+  // ── FUNERALS ──────────────────────────────────────────────────────────────
+  const addFuneral = async (f) => {
+    const isUpdate = f.id && funerals.find(x => x.id === f.id);
+    const payload = {
+      church_id: currentChurch.id,
+      register_number: f.registerNumber,
+      deceased_name: f.deceasedName, deceased_age: f.deceasedAge,
+      deceased_gender: f.deceasedGender, date_of_death: f.dateOfDeath,
+      place_of_death: f.placeOfDeath, cause_of_death: f.causeOfDeath,
+      religion: f.religion,
+      funeral_mass_date: f.funeralMassDate, funeral_mass_time: f.funeralMassTime,
+      funeral_location: f.funeralLocation, celebrating_priest: f.celebratingPriest,
+      burial_date: f.burialDate, burial_location: f.burialLocation, burial_type: f.burialType,
+      vigil: f.vigil, vigil_date: f.vigilDate, vigil_time: f.vigilTime, vigil_location: f.vigilLocation,
+      requested_by: f.requestedBy, relationship: f.relationship, contact_number: f.contactNumber,
+      death_cert_file: f.deathCertFile || null,
+      certificate_issued: f.certificateIssued,
+      schedule_mass: f.scheduleMass, mass_date: f.massDate,
+      mass_time: f.massTime, mass_location: f.massLocation,
+      notes: f.notes, archived: false,
+    };
+    if (isUpdate) {
+      await supabase.from('funerals').update(payload).eq('id', f.id);
+      setFunerals(prev => prev.map(x => x.id === f.id ? { ...x, ...f } : x));
+    } else {
+      const { data, error } = await supabase.from('funerals').insert(payload).select().single();
+      if (error) { console.error('addFuneral error:', error); return; }
+      if (data) setFunerals(prev => [...prev, { ...f, id: data.id }]);
+    }
+    addLog(isUpdate ? 'Updated' : 'Added', 'Funeral', `${f.deceasedName}`);
   };
-  const archiveFuneral = (id) => {
-    const f = funerals.find(x => x.id === id);
-    setFunerals(prev => prev.map(x => x.id === id ? { ...x, archived: true, archivedAt: new Date().toISOString() } : x));
-    if (f) addLog('Archived', 'Funeral', `${f.deceasedName}`);
+
+  const archiveFuneral = async (id) => {
+    await supabase.from('funerals').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', id);
+    setFunerals(prev => prev.map(x => x.id === id ? { ...x, archived: true } : x));
   };
-  const restoreFuneral = (id) => {
-    const f = funerals.find(x => x.id === id);
+
+  const restoreFuneral = async (id) => {
+    await supabase.from('funerals').update({ archived: false }).eq('id', id);
     setFunerals(prev => prev.map(x => x.id === id ? { ...x, archived: false } : x));
-    if (f) addLog('Restored', 'Funeral', `${f.deceasedName}`);
   };
-  const deleteFuneral = (id) => {
-    const f = funerals.find(x => x.id === id);
+
+  const deleteFuneral = async (id) => {
+    await supabase.from('funerals').delete().eq('id', id);
     setFunerals(prev => prev.filter(x => x.id !== id));
-    if (f) addLog('Deleted', 'Funeral', `${f.deceasedName} permanently deleted`);
   };
 
-  // ── Finance ───────────────────────────────────────────────────────────────
-  const addTransaction = (t) => {
-    setTransactions(prev => [...prev, { ...t, id: Date.now(), status: 'Completed', archived: false }]);
-    addLog('Added', 'Finance', `${t.type === 'income' ? 'Income' : 'Expense'}: ₱${t.amount} — ${t.category}`);
-  };
-  const updateTransaction = (id, data) => setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...data } : t));
-  const archiveTransaction = (id) => {
-    const t = transactions.find(x => x.id === id);
-    setTransactions(prev => prev.map(x => x.id === id ? { ...x, archived: true, archivedAt: new Date().toISOString() } : x));
-    if (t) addLog('Archived', 'Finance', `₱${t.amount} — ${t.category}`);
-  };
-  const restoreTransaction = (id) => {
-    const t = transactions.find(x => x.id === id);
-    setTransactions(prev => prev.map(x => x.id === id ? { ...x, archived: false } : x));
-    if (t) addLog('Restored', 'Finance', `₱${t.amount} — ${t.category}`);
-  };
-  const deleteTransaction = (id) => {
-    const t = transactions.find(x => x.id === id);
-    setTransactions(prev => prev.filter(x => x.id !== id));
-    if (t) addLog('Deleted', 'Finance', `₱${t.amount} — ${t.category} permanently deleted`);
-  };
-
-  // ── Requests ──────────────────────────────────────────────────────────────
-  const addEventRequest = (r) => {
-    const ref = `EV-${Date.now().toString().slice(-6)}`;
-    setEventRequests(prev => [...prev, { ...r, id: Date.now(), status: 'Pending', referenceNumber: ref }]);
-    addLog('Received', 'Event Request', `"${r.title || r.eventType}" by ${r.fullName || 'Client'} — Ref: ${ref}`);
-  };
-  const updateEventRequest = (id, status, priest) => {
-    const r = eventRequests.find(x => x.id === id);
-    setEventRequests(prev => prev.map(x => x.id === id ? { ...x, status, assignedPriest: priest || x.assignedPriest } : x));
-    if (r) addLog(status, 'Event Request', `"${r.title || r.eventType}" — ${status}`);
-    if (status === 'Approved' && r) {
-      setEvents(prev => [...prev, {
-        id: Date.now(), title: r.title || r.eventType, date: r.preferredDate || r.date,
-        time: r.preferredTime || r.time, type: r.eventType || 'other',
-        location: r.location, priest: priest || r.priest,
-        status: 'approved', archived: false, done: false
+  // ── FINANCE ───────────────────────────────────────────────────────────────
+  const addTransaction = async (t) => {
+    const { data, error } = await supabase.from('transactions').insert({
+      church_id: currentChurch.id,
+      type: t.type, category: t.category, custom_category: t.customCategory,
+      amount: Number(t.amount), date: t.date, method: t.method,
+      payer: t.payer, description: t.description,
+      status: 'Completed', archived: false,
+    }).select().single();
+    if (error) { console.error('addTransaction error:', error); return; }
+    if (data) {
+      setTransactions(prev => [...prev, {
+        id: data.id, type: data.type, category: data.category,
+        amount: data.amount, date: data.date, method: data.method,
+        payer: data.payer, description: data.description,
+        status: data.status, archived: false,
       }]);
+      addLog('Added', 'Finance', `${t.type === 'income' ? 'Income' : 'Expense'}: ₱${t.amount} — ${t.category}`);
     }
   };
 
-  const addRecordRequest = (r) => {
-    const ref = `RR-${Date.now().toString().slice(-6)}`;
-    setRecordRequests(prev => [...prev, { ...r, id: Date.now(), status: 'Pending', referenceNumber: ref }]);
-    addLog('Received', 'Record Request', `${r.recordType} for ${r.fullName} — Ref: ${ref}`);
+  const archiveTransaction = async (id) => {
+    await supabase.from('transactions').update({ archived: true, archived_at: new Date().toISOString() }).eq('id', id);
+    setTransactions(prev => prev.map(x => x.id === id ? { ...x, archived: true } : x));
   };
-  const updateRecordRequest = (id, status) => {
+
+  const restoreTransaction = async (id) => {
+    await supabase.from('transactions').update({ archived: false }).eq('id', id);
+    setTransactions(prev => prev.map(x => x.id === id ? { ...x, archived: false } : x));
+  };
+
+  const deleteTransaction = async (id) => {
+    await supabase.from('transactions').delete().eq('id', id);
+    setTransactions(prev => prev.filter(x => x.id !== id));
+  };
+
+  // ── REQUESTS ──────────────────────────────────────────────────────────────
+  const addEventRequest = async (r) => {
+    const ref = genRef('EV');
+    const churchId = selectedChurch?.id || currentChurch?.id;
+    const { data, error } = await supabase.from('event_requests').insert({
+      church_id: churchId, reference_number: ref,
+      full_name: r.fullName, contact: r.contact, email: r.email,
+      event_type: r.eventType, preferred_date: r.preferredDate,
+      preferred_time: r.preferredTime, location: r.location,
+      notes: r.notes, status: 'Pending',
+    }).select().single();
+    if (error) { console.error('addEventRequest error:', error); return ref; }
+    if (data) setEventRequests(prev => [{ ...r, id: data.id, referenceNumber: ref, status: 'Pending' }, ...prev]);
+    return ref;
+  };
+
+  const updateEventRequest = async (id, status, priest) => {
+    const r = eventRequests.find(x => x.id === id);
+    await supabase.from('event_requests').update({ status, assigned_priest: priest || null }).eq('id', id);
+    setEventRequests(prev => prev.map(x => x.id === id ? { ...x, status, assignedPriest: priest } : x));
+    if (status === 'Approved' && r) {
+      addEvent({
+        title: r.title || r.eventType, date: r.preferredDate,
+        time: r.preferredTime, type: 'other',
+        location: r.location, priest, status: 'approved', done: false,
+      });
+    }
+    // Send email notification
+    if (r?.email) {
+      await sendRequestNotification({
+        requesterEmail: r.email,
+        requesterName: r.fullName,
+        requestType: `Event Request (${r.eventType})`,
+        referenceNumber: r.referenceNumber,
+        status,
+        churchName: currentChurch?.church_name,
+        churchEmail: currentChurch?.email,
+      });
+    }
+    addLog(status, 'Event Request', `"${r?.eventType}" — ${status}`);
+  };
+
+  const addRecordRequest = async (r) => {
+    const ref = genRef('RR');
+    const churchId = selectedChurch?.id || currentChurch?.id;
+    const { data, error } = await supabase.from('record_requests').insert({
+      church_id: churchId, reference_number: ref,
+      full_name: r.fullName, contact: r.contact, email: r.email,
+      record_type: r.recordType, notes: r.notes, status: 'Pending',
+    }).select().single();
+    if (error) { console.error('addRecordRequest error:', error); return ref; }
+    if (data) setRecordRequests(prev => [{ ...r, id: data.id, referenceNumber: ref, status: 'Pending' }, ...prev]);
+    return ref;
+  };
+
+  const updateRecordRequest = async (id, status) => {
     const r = recordRequests.find(x => x.id === id);
+    await supabase.from('record_requests').update({ status }).eq('id', id);
     setRecordRequests(prev => prev.map(x => x.id === id ? { ...x, status } : x));
-    if (r) addLog(status, 'Record Request', `${r.recordType} for ${r.fullName}`);
+    // Send email notification
+    if (r?.email) {
+      await sendRequestNotification({
+        requesterEmail: r.email,
+        requesterName: r.fullName,
+        requestType: `Record Request (${r.recordType})`,
+        referenceNumber: r.referenceNumber,
+        status,
+        churchName: currentChurch?.church_name,
+        churchEmail: currentChurch?.email,
+      });
+    }
+    addLog(status, 'Record Request', `${r?.recordType} for ${r?.fullName}`);
   };
 
-  const addMembershipRequest = (r) => {
-    const ref = `MR-${Date.now().toString().slice(-6)}`;
-    setMembershipRequests(prev => [...prev, { ...r, id: Date.now(), status: 'Pending', referenceNumber: ref }]);
-    addLog('Received', 'Membership Request', `${r.firstName} ${r.lastName} applied for ${r.ministry} — Ref: ${ref}`);
+  const addMembershipRequest = async (r) => {
+    const ref = genRef('MR');
+    const churchId = selectedChurch?.id || currentChurch?.id;
+    const { data, error } = await supabase.from('membership_requests').insert({
+      church_id: churchId, reference_number: ref,
+      first_name: r.firstName, middle_name: r.middleName, last_name: r.lastName,
+      gender: r.gender, birthday: r.birthday,
+      contact: r.contact, email: r.email, address: r.address,
+      ministry: r.ministry, notes: r.notes, photo: r.photo || '',
+      status: 'Pending',
+    }).select().single();
+    if (error) { console.error('addMembershipRequest error:', error); return ref; }
+    if (data) setMembershipRequests(prev => [{ ...r, id: data.id, referenceNumber: ref, status: 'Pending' }, ...prev]);
+    return ref;
   };
-  const updateMembershipRequest = (id, status) => {
+
+  const updateMembershipRequest = async (id, status) => {
     const r = membershipRequests.find(x => x.id === id);
+    await supabase.from('membership_requests').update({ status }).eq('id', id);
     setMembershipRequests(prev => prev.map(x => x.id === id ? { ...x, status } : x));
-    if (r) {
-      addLog(status, 'Membership Request', `${r.firstName} ${r.lastName} — ${r.ministry}`);
-      if (status === 'Approved') {
-        addMember({
-          firstName: r.firstName, middleName: r.middleName || '', lastName: r.lastName,
-          gender: r.gender || '', birthday: r.birthday || '', address: r.address || '',
-          contact: r.contact || '', email: r.email || '', ministry: r.ministry || '',
-          role: 'Member', status: 'Active', joined: new Date().toISOString().slice(0,10),
-          skills: [], availability: [], baptized: false, confirmed: false, firstCommunion: false,
-          photo: r.photo || '', notes: r.notes || '', archived: false,
-        });
-      }
+    if (status === 'Approved' && r) {
+      addMember({
+        firstName: r.firstName, middleName: r.middleName || '',
+        lastName: r.lastName, gender: r.gender || '',
+        birthday: r.birthday || '', address: r.address || '',
+        contact: r.contact || '', email: r.email || '',
+        ministry: r.ministry || '', role: 'Member', status: 'Active',
+        joined: new Date().toISOString().slice(0, 10),
+        skills: [], availability: [], photo: r.photo || '', archived: false,
+      });
     }
+    // Send email notification
+    if (r?.email) {
+      await sendRequestNotification({
+        requesterEmail: r.email,
+        requesterName: `${r.firstName} ${r.lastName}`,
+        requestType: `Ministry Membership Request (${r.ministry})`,
+        referenceNumber: r.referenceNumber,
+        status,
+        churchName: currentChurch?.church_name,
+        churchEmail: currentChurch?.email,
+      });
+    }
+    addLog(status, 'Membership Request', `${r?.firstName} ${r?.lastName}`);
+  };
+
+  // ── BULLETINS ─────────────────────────────────────────────────────────────
+  const addBulletin = async (b) => {
+    const { data, error } = await supabase.from('bulletins').insert({
+      church_id: currentChurch.id,
+      title: b.title, category: b.category, content: b.content,
+      author: b.author, pinned: b.pinned || false,
+    }).select().single();
+    if (error) { console.error('addBulletin error:', error); return; }
+    if (data) {
+      setBulletins(prev => [{
+        id: data.id, title: data.title, category: data.category,
+        content: data.content, author: data.author,
+        pinned: data.pinned, createdAt: data.created_at,
+      }, ...prev]);
+      addLog('Added', 'Bulletin', `"${b.title}"`);
+    }
+  };
+
+  const updateBulletin = async (id, b) => {
+    await supabase.from('bulletins').update({
+      title: b.title, category: b.category, content: b.content,
+      author: b.author, pinned: b.pinned,
+    }).eq('id', id);
+    setBulletins(prev => prev.map(x => x.id === id ? { ...x, ...b } : x));
+  };
+
+  const deleteBulletin = async (id) => {
+    await supabase.from('bulletins').delete().eq('id', id);
+    setBulletins(prev => prev.filter(x => x.id !== id));
+  };
+
+  const togglePinBulletin = async (id) => {
+    const b = bulletins.find(x => x.id === id);
+    const newPinned = !b?.pinned;
+    await supabase.from('bulletins').update({ pinned: newPinned }).eq('id', id);
+    setBulletins(prev => prev.map(x => x.id === id ? { ...x, pinned: newPinned } : x));
+  };
+
+  // ── MASS SCHEDULES ────────────────────────────────────────────────────────
+  const addMassSchedule = async (s) => {
+    const { data, error } = await supabase.from('mass_schedules').insert({
+      church_id: currentChurch.id,
+      day: s.day, time: s.time, type: s.type,
+      priest: s.priest, location: s.location,
+      language: s.language, notes: s.notes,
+    }).select().single();
+    if (error) { console.error('addMassSchedule error:', error); return; }
+    if (data) {
+      setMassSchedules(prev => [...prev, {
+        id: data.id, churchId: data.church_id,
+        day: data.day, time: data.time, type: data.type,
+        priest: data.priest, location: data.location,
+        language: data.language, notes: data.notes,
+      }]);
+      addLog('Added', 'Mass Schedule', `${s.day} ${s.time} — ${s.type}`);
+    }
+  };
+
+  const deleteMassSchedule = async (id) => {
+    await supabase.from('mass_schedules').delete().eq('id', id);
+    setMassSchedules(prev => prev.filter(x => x.id !== id));
+  };
+
+  // ── CLERK ACCOUNTS ────────────────────────────────────────────────────────
+  const activateClerkAccount = async (id) => {
+    await supabase.from('clerk_accounts').update({ active: true }).eq('id', id);
+    setClerkAccounts(prev => prev.map(a => a.id === id ? { ...a, active: true } : a));
+  };
+
+  const deleteClerkAccount = async (id) => {
+    await supabase.from('clerk_accounts').delete().eq('id', id);
+    setClerkAccounts(prev => prev.filter(a => a.id !== id));
+  };
+
+  // ── SUPER ADMIN ───────────────────────────────────────────────────────────
+  const updateChurchStatus = async (id, status) => {
+    await supabase.from('churches').update({ status }).eq('id', id);
+    setChurches(prev => prev.map(c => c.id === id ? { ...c, status } : c));
+    if (status === 'active') {
+      await supabase.from('clerk_accounts').update({ active: true }).eq('church_id', id);
+    }
+  };
+
+  // ── LOAD ACTIVE CHURCHES FOR CLIENT ──────────────────────────────────────
+  const loadActiveChurches = async () => {
+    const { data } = await supabase.from('churches').select('*').eq('status', 'active').order('church_name');
+    return data || [];
+  };
+
+  // ── LOGOUT ────────────────────────────────────────────────────────────────
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setRole(null); setCurrentChurch(null); setCurrentClerk(null);
+    setEvents([]); setMembers([]); setPriests([]); setParishioners([]);
+    setBaptisms([]); setConfirmations([]); setFirstCommunions([]);
+    setMarriages([]); setFunerals([]); setTransactions([]);
+    setEventRequests([]); setRecordRequests([]); setMembershipRequests([]);
+    setBulletins([]); setMassSchedules([]); setActivityLog([]);
   };
 
   return (
     <AppContext.Provider value={{
-      isClerk, setIsClerk,
+      role, setRole, currentChurch, setCurrentChurch,
+      currentClerk, setCurrentClerk,
+      selectedChurch, setSelectedChurch,
+      authLoading, loading, logout,
+      churches, loadChurches, loadActiveChurches, updateChurchStatus,
+      // Client-specific state (separate from clerk state)
+      clientEvents, clientBulletins, clientMassSchedules,
       events, addEvent, updateEvent, archiveEvent, markEventDone, restoreEvent, deleteEvent,
       members, addMember, updateMember, archiveMember, restoreMember, deleteMember,
       priests, addPriest, updatePriest, archivePriest, restorePriest, deletePriest,
@@ -332,14 +1132,16 @@ export function AppProvider({ children }) {
       firstCommunions, addFirstCommunion, archiveFirstCommunion, restoreFirstCommunion, deleteFirstCommunion,
       marriages, addMarriage, archiveMarriage, restoreMarriage, deleteMarriage,
       funerals, addFuneral, archiveFuneral, restoreFuneral, deleteFuneral,
-      transactions, addTransaction, updateTransaction, archiveTransaction, restoreTransaction, deleteTransaction,
+      transactions, addTransaction, archiveTransaction, restoreTransaction, deleteTransaction,
       eventRequests, addEventRequest, updateEventRequest,
       recordRequests, addRecordRequest, updateRecordRequest,
       membershipRequests, addMembershipRequest, updateMembershipRequest,
       activityLog,
-      clerkAccounts, addClerkAccount, activateClerkAccount, deleteClerkAccount,
       bulletins, addBulletin, updateBulletin, deleteBulletin, togglePinBulletin,
       massSchedules, addMassSchedule, deleteMassSchedule,
+      clerkAccounts, activateClerkAccount, deleteClerkAccount,
+      isClerk: role === 'clerk',
+      setIsClerk: (v) => { if (!v) logout(); },
     }}>
       {children}
     </AppContext.Provider>
