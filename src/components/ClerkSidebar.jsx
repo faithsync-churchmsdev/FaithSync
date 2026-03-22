@@ -5,17 +5,18 @@ import './ClerkSidebar.css';
 const NAV_ITEMS = [
   { id: 'Dashboard', icon: '🏠', label: 'Dashboard' },
   { id: 'Schedule Event', icon: '📅', label: 'Schedule Event' },
+  { id: 'Mass Schedule', icon: '🕯️', label: 'Mass Schedule' },
   { id: 'Records Manager', icon: '📂', label: 'Records Manager' },
   { id: 'Parish Directory', icon: '⛪', label: 'Parish Directory' },
   { id: 'Finance Management', icon: '💰', label: 'Finance Management' },
   { id: 'Bulletin Board', icon: '📌', label: 'Bulletin Board' },
-  { id: 'Archives', icon: '🗃️', label: 'Archives' },
   { id: 'Requests', icon: '📬', label: 'Requests' },
+  { id: 'Archives', icon: '🗃️', label: 'Archives' },
   { id: 'About', icon: 'ℹ️', label: 'About' },
 ];
 
 export default function ClerkSidebar({ page, setPage, onLogout }) {
-  const { eventRequests, recordRequests, membershipRequests, clerkAccounts } = useApp();
+  const { eventRequests, recordRequests, membershipRequests, clerkAccounts, currentChurch } = useApp();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const pendingCount = [
@@ -56,6 +57,21 @@ export default function ClerkSidebar({ page, setPage, onLogout }) {
             <div className="sidebar-role">Clerk Portal</div>
           </div>
         </div>
+
+        {/* Church name display */}
+        {currentChurch && (
+          <div style={{
+            padding: '8px 16px 12px',
+            borderBottom: '1px solid rgba(255,255,255,0.15)',
+            fontSize: '0.75rem',
+            color: 'rgba(255,255,255,0.7)',
+            lineHeight: '1.4',
+          }}>
+            <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px', opacity: 0.6 }}>Current Church</div>
+            <div style={{ fontWeight: '700', color: 'white', fontSize: '0.8rem' }}>⛪ {currentChurch.church_name}</div>
+          </div>
+        )}
+
         <nav className="sidebar-nav">
           {NAV_ITEMS.map(item => (
             <button
