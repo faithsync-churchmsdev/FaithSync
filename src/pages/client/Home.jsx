@@ -157,7 +157,7 @@ export default function Home({ setPage }) {
             <div className="bulletin-detail-header" style={{ borderBottom: `4px solid ${CAT_COLORS[selectedBulletin.category] || '#1a6fb5'}` }}>
               <div className="bulletin-detail-cat">
                 {CAT_ICONS[selectedBulletin.category] || '📌'} {selectedBulletin.category}
-                {selectedBulletin.pinned && <span className="home-pinned-tag" style={{marginLeft:'8px'}}>📌 Pinned</span>}
+                {selectedBulletin.pinned && <span className="home-pinned-tag-inline">📌 Pinned</span>}
               </div>
               <h2 className="bulletin-detail-title">{selectedBulletin.title}</h2>
               <p className="bulletin-detail-meta">✍️ {selectedBulletin.author || 'Parish Clerk'} · {fmtDate(selectedBulletin.createdAt)}</p>

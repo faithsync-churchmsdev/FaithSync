@@ -150,3 +150,27 @@
 /* ── Inline validation ── */
 .input-error { border-color: var(--danger) !important; }
 .field-error { color: var(--danger); font-size: 0.78rem; display: block; margin-top: 4px; }
+
+/* ── Upcoming events list ── */
+.req-upcoming { margin-top: 28px; }
+.req-upcoming h3 { font-size: 1rem; font-weight: 700; color: var(--accent); margin-bottom: 12px; }
+.req-event-list { display: flex; flex-direction: column; gap: 10px; }
+.req-event-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.req-event-card:hover {
+  background: var(--primary-pale);
+  transform: translateX(4px);
+  box-shadow: var(--shadow-md);
+}
+.req-event-card strong { font-size: 0.95rem; font-weight: 700; color: var(--text-dark); display: block; margin-bottom: 4px; }
+.req-event-card p { font-size: 0.82rem; color: var(--text-light); margin: 0; }

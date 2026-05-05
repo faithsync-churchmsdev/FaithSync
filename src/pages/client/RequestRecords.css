@@ -117,3 +117,7 @@
 /* ── Inline validation ── */
 .input-error { border-color: var(--danger) !important; }
 .field-error { color: var(--danger); font-size: 0.78rem; display: block; margin-top: 4px; }
+
+/* ── Select link ── */
+.rr-card-select-link { font-size: 0.82rem; font-weight: 700; color: var(--primary); margin-top: 8px; display: inline-block; }
+.rr-content { max-width: 1000px; margin: 0 auto; padding: 32px; }

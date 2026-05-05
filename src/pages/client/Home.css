@@ -117,7 +117,8 @@
 /* ── Bulletin Board client ── */
 .home-bulletin-list { display: flex; flex-direction: column; gap: 12px; }
 .home-bulletin-card { background: white; border: 1px solid var(--border); border-left: 4px solid var(--primary); border-radius: var(--radius); padding: 14px 16px; position: relative; }
-.home-pinned-tag { position: absolute; top: -10px; right: 12px; background: #f0c040; color: #7a5c00; padding: 2px 8px; border-radius: 50px; font-size: 0.7rem; font-weight: 800; }
+.home-pinned-tag { position: absolute; top: -10px; right: 12px; background: #f0c040; color: #7a5c00; padding: 2px 10px; border-radius: 50px; font-size: 0.7rem; font-weight: 800; white-space: nowrap; z-index: 2; }
+.home-pinned-tag-inline { display: inline-block; background: #f0c040; color: #7a5c00; padding: 2px 10px; border-radius: 50px; font-size: 0.7rem; font-weight: 800; margin-left: 8px; white-space: nowrap; vertical-align: middle; }
 .home-bulletin-title { font-weight: 700; font-size: 0.95rem; color: var(--accent); margin-bottom: 4px; }
 .home-bulletin-content { font-size: 0.87rem; color: var(--text-mid); line-height: 1.6; margin-bottom: 6px; white-space: pre-line; }
 .home-bulletin-meta { font-size: 0.75rem; color: var(--text-light); }
@@ -146,7 +147,7 @@
 
 /* Bulletin detail modal */
 .bulletin-detail-modal { max-width: 640px; width: 92vw; padding: 0; overflow: hidden; max-height: 85vh; display: flex; flex-direction: column; }
-.bulletin-detail-header { padding: 20px 24px 16px; position: relative; background: var(--primary-bg); flex-shrink: 0; }
+.bulletin-detail-header { padding: 20px 24px 16px; position: relative; background: var(--primary-bg); flex-shrink: 0; overflow: visible; }
 .bulletin-detail-cat { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
 .bulletin-detail-title { font-size: 1.25rem; font-weight: 800; color: var(--accent); margin-bottom: 6px; padding-right: 32px; }
 .bulletin-detail-meta { font-size: 0.78rem; color: var(--text-light); }
